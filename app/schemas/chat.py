@@ -1,14 +1,14 @@
-from pydantic import BaseModel
+# from pydantic import BaseModel
 
 
-class Message(BaseModel):
-    role: str
-    content: str
+# class Message(BaseModel):
+#     role: str
+#     content: str
 
 
-class ChatRequest(BaseModel):
-    messages: list[Message]
+# class ChatRequest(BaseModel):
+#     messages: list[Message]
 
 
-class ChatResponse(BaseModel):
-    content: str
+# class ChatResponse(BaseModel):
+#     content: str

@@ -73,6 +73,7 @@ cp .env.example .env
 
 # 서버 실행
 uvicorn app.main:app --reload
+python app/main.py
 ```
 
 ## 환경변수

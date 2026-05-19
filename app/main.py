@@ -2,7 +2,7 @@ import uvicorn
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 
-from app.api.v1.routes import chat, health, user
+from app.api.v1.routes import auth, chat, health, session, user
 from app.core.exceptions import AppHTTPException
 
 app = FastAPI(title="LLM Backend")
@@ -17,7 +17,9 @@ async def app_http_exception_handler(_request: Request, exc: AppHTTPException):
 
 
 app.include_router(health.router, prefix="/api/v1")
+app.include_router(auth.router, prefix="/api/v1")
 app.include_router(user.router, prefix="/api/v1")
+app.include_router(session.router, prefix="/api/v1")
 # app.include_router(chat.router, prefix="/api/v1", tags=["chat"])
 
 if __name__ == "__main__":

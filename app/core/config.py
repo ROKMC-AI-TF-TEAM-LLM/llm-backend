@@ -5,7 +5,7 @@ class Settings(BaseSettings):
     llm_server_url: str = "http://localhost:8001"
     request_timeout: int = 60
 
-    database_url: str = "postgresql+asyncpg://user:password@localhost:5432/llm_backend"
+    database_url: str = "postgresql+asyncpg://user:password@localhost:5432/llm_db"
 
     jwt_secret_key: str = "change-me"
     jwt_algorithm: str = "HS256"

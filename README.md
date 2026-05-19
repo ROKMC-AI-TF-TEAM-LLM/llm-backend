@@ -86,11 +86,12 @@ python app/main.py
 
 
 
-CREATE DATABASE llm_backend;
+CREATE DATABASE llm_db;
 
+# DB에 테이블 생성
+alembic upgrade head
 
 # 마이그레이션 파일 자동 생성
 alembic revision --autogenerate -m "create users sessions messages"
 
-# DB에 테이블 생성
-alembic upgrade head
+

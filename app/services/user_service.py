@@ -1,10 +1,10 @@
 import uuid
 
 import bcrypt
-from fastapi import HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.exceptions import ConflictError, NotFoundError
 from app.models.user import User
 from app.schemas.user import UserCreate, UserUpdate
 
@@ -20,7 +20,7 @@ def _verify(plain: str, hashed: str) -> bool:
 async def create_user(db: AsyncSession, data: UserCreate) -> User:
     existing = await db.scalar(select(User).where(User.email == data.email))
     if existing:
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="이미 사용 중인 이메일입니다.")
+        raise ConflictError("이미 사용 중인 이메일입니다.")
 
     user = User(email=data.email, password=_hash(data.password))
     db.add(user)
@@ -32,7 +32,7 @@ async def create_user(db: AsyncSession, data: UserCreate) -> User:
 async def get_user(db: AsyncSession, user_id: uuid.UUID) -> User:
     user = await db.scalar(select(User).where(User.user_id == user_id))
     if not user:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="사용자를 찾을 수 없습니다.")
+        raise NotFoundError("사용자를 찾을 수 없습니다.")
     return user
 
 

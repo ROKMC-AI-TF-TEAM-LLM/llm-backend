@@ -1,9 +1,20 @@
 import uvicorn
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
+from fastapi.responses import JSONResponse
 
 from app.api.v1.routes import chat, health, user
+from app.core.exceptions import AppHTTPException
 
 app = FastAPI(title="LLM Backend")
+
+
+@app.exception_handler(AppHTTPException)
+async def app_http_exception_handler(_request: Request, exc: AppHTTPException):
+    return JSONResponse(
+        status_code=exc.status_code,
+        content={"error_code": exc.error_code, "detail": exc.detail},
+    )
+
 
 app.include_router(health.router, prefix="/api/v1")
 app.include_router(user.router, prefix="/api/v1")

@@ -82,3 +82,15 @@ python app/main.py
 |------|--------|------|
 | `LLM_SERVER_URL` | `http://localhost:8001` | LLM 서버 주소 |
 | `REQUEST_TIMEOUT` | `60` | HTTP 요청 타임아웃 (초) |
+
+
+
+
+CREATE DATABASE llm_backend;
+
+
+# 마이그레이션 파일 자동 생성
+alembic revision --autogenerate -m "create users sessions messages"
+
+# DB에 테이블 생성
+alembic upgrade head

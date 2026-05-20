@@ -3,6 +3,9 @@ from collections.abc import AsyncGenerator
 import httpx
 
 from app.core.config import settings
+from app.core.logger import get_logger
+
+logger = get_logger(__name__)
 
 
 async def stream_chat(question: str, messages: list[dict]) -> AsyncGenerator[str, None]:
@@ -15,6 +18,7 @@ async def stream_chat(question: str, messages: list[dict]) -> AsyncGenerator[str
         ) as response:
             buffer = ""
             async for chunk in response.aiter_text():
+                logger.debug("[RAW HTTP CHUNK] %r", chunk)
                 buffer += chunk
 
                 # 이벤트 경계: \n\ndata: (청크 내부 \n\n과 구별 가능)
@@ -22,10 +26,12 @@ async def stream_chat(question: str, messages: list[dict]) -> AsyncGenerator[str
                     sep = buffer.find("\n\ndata: ")
                     value = buffer[len("data: "):sep]
                     buffer = "data: " + buffer[sep + len("\n\ndata: "):]
+                    # logger.debug("[PARSED EVENT] %r", value)
                     yield value
 
             # 마지막 이벤트 ([DONE] 또는 [ERROR])
             if buffer.startswith("data: "):
                 value = buffer[len("data: "):].rstrip("\n")
                 if value:
+                    logger.debug("[PARSED EVENT last] %r", value)
                     yield value

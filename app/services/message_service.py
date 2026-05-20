@@ -15,8 +15,7 @@ logger = get_logger(__name__)
 
 
 def _to_llm_messages(messages: list[Message]) -> list[dict]:
-    role_map = {RoleEnum.user: "human", RoleEnum.assistant: "ai"}
-    return [{"role": role_map[m.role], "content": m.content} for m in messages]
+    return [{"role": m.role.value, "content": m.content} for m in messages]
 
 
 async def _verify_session(db: AsyncSession, session_id: uuid.UUID, user_id: uuid.UUID) -> Session:
@@ -59,7 +58,7 @@ async def chat_stream(
     llm_messages = _to_llm_messages(list(history_result.all()))
     logger.info("이전 대화 이력 %d건 전송", len(llm_messages))
 
-    db.add(Message(session_id=session_id, role=RoleEnum.user, content=question))
+    db.add(Message(session_id=session_id, role=RoleEnum.human, content=question))
     await db.commit()
     logger.info("유저 메시지 저장 완료")
 
@@ -67,7 +66,7 @@ async def chat_stream(
     async for raw in llm_client.stream_chat(question, llm_messages):
         if raw == "[DONE]":
             content = "".join(accumulated)
-            db.add(Message(session_id=session_id, role=RoleEnum.assistant, content=content))
+            db.add(Message(session_id=session_id, role=RoleEnum.ai, content=content))
             await db.commit()
             logger.info("어시스턴트 응답 저장 완료 length=%d", len(content))
             yield "data: [DONE]\n\n"
@@ -88,5 +87,4 @@ async def chat_stream(
             pass
 
         accumulated.append(raw)
-        logger.debug("chunk: %s", raw)
         yield f"data: {raw}\n\n"

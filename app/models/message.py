@@ -9,8 +9,8 @@ from app.core.database import Base
 
 
 class RoleEnum(str, enum.Enum):
-    user = "user"
-    assistant = "assistant"
+    human = "human"
+    ai = "ai"
 
 
 class Message(Base):

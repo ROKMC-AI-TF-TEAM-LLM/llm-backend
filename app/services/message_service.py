@@ -88,4 +88,5 @@ async def chat_stream(
             pass
 
         accumulated.append(raw)
+        logger.debug("chunk: %s", raw)
         yield f"data: {raw}\n\n"

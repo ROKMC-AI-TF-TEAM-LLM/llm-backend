@@ -1,6 +1,6 @@
 import uuid
 
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
@@ -30,6 +30,16 @@ async def get_sessions(
 ):
     sessions = await session_service.get_sessions(db, current_user.user_id)
     return ApiResponse.ok([SessionResponse.model_validate(s) for s in sessions])
+
+
+@router.get("/search", response_model=ApiResponse[list[SessionResponse]])
+async def search_sessions(
+    q: str = Query(..., min_length=1),
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    sessions = await session_service.search_sessions(db, current_user.user_id, q)
+    return ApiResponse.ok([SessionResponse.model_validate(s) for s in sessions], status_code=200)
 
 
 @router.patch("/{session_id}", response_model=ApiResponse[SessionResponse])

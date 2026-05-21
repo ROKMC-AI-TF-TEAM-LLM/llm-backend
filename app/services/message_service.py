@@ -1,6 +1,7 @@
 import json
 import uuid
 from collections.abc import AsyncGenerator
+from datetime import datetime, timezone
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -47,9 +48,10 @@ async def chat_stream(
     user_id: uuid.UUID,
     question: str,
 ) -> AsyncGenerator[str, None]:
-    await _verify_session(db, session_id, user_id)
+    session = await _verify_session(db, session_id, user_id)
     logger.info("스트리밍 시작 session_id=%s", session_id)
 
+    
     history_result = await db.scalars(
         select(Message)
         .where(Message.session_id == session_id)
@@ -67,6 +69,7 @@ async def chat_stream(
         if raw == "[DONE]":
             content = "".join(accumulated)
             db.add(Message(session_id=session_id, role=RoleEnum.ai, content=content))
+            session.updated_at = datetime.now(timezone.utc)
             await db.commit()
             logger.info("어시스턴트 응답 저장 완료 length=%d", len(content))
             yield "data: [DONE]\n\n"

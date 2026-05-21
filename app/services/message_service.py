@@ -5,7 +5,7 @@ from collections.abc import AsyncGenerator
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.exceptions import ForbiddenError, NotFoundError
+from app.core.exceptions import SessionAccessDeniedError, SessionNotFoundError
 from app.core.logger import get_logger
 from app.models.message import Message, RoleEnum
 from app.models.session import Session
@@ -22,10 +22,10 @@ async def _verify_session(db: AsyncSession, session_id: uuid.UUID, user_id: uuid
     session = await db.scalar(select(Session).where(Session.session_id == session_id))
     if not session:
         logger.warning("세션 없음 session_id=%s", session_id)
-        raise NotFoundError("세션을 찾을 수 없습니다.")
+        raise SessionNotFoundError()
     if session.user_id != user_id:
         logger.warning("세션 접근 권한 없음 session_id=%s user_id=%s", session_id, user_id)
-        raise ForbiddenError("접근 권한이 없습니다.")
+        raise SessionAccessDeniedError()
     return session
 
 

@@ -1,11 +1,3 @@
-class AppError(Exception):
-    """프로젝트의 모든 커스텀 예외의 베이스 클래스."""
-
-
-class UserError(AppError):
-    """User 엔티티 전용 예외"""
-
-# HTTP 예외 핸들러
 class AppHTTPException(Exception):
     status_code: int = 500
     error_code: str = "INTERNAL_ERROR"
@@ -17,36 +9,96 @@ class AppHTTPException(Exception):
         super().__init__(self.detail)
 
 
+# 400
 class BadRequestError(AppHTTPException):
     status_code = 400
     error_code = "BAD_REQUEST"
     detail = "Bad Request"
 
 
+# 401
 class UnauthorizedError(AppHTTPException):
     status_code = 401
     error_code = "UNAUTHORIZED"
     detail = "Unauthorized"
 
 
+class InvalidCredentialsError(AppHTTPException):
+    status_code = 401
+    error_code = "INVALID_CREDENTIALS"
+    detail = "이메일 또는 비밀번호가 올바르지 않습니다."
+
+
+class TokenInvalidError(AppHTTPException):
+    status_code = 401
+    error_code = "TOKEN_INVALID"
+    detail = "유효하지 않은 토큰입니다."
+
+
+# 403
 class ForbiddenError(AppHTTPException):
     status_code = 403
     error_code = "FORBIDDEN"
     detail = "Forbidden"
 
 
+class ApprovalPendingError(AppHTTPException):
+    status_code = 403
+    error_code = "APPROVAL_PENDING"
+    detail = "승인 대기 중인 계정입니다."
+
+
+class ApprovalRejectedError(AppHTTPException):
+    status_code = 403
+    error_code = "APPROVAL_REJECTED"
+    detail = "승인이 거절된 계정입니다."
+
+
+class AdminRequiredError(AppHTTPException):
+    status_code = 403
+    error_code = "ADMIN_REQUIRED"
+    detail = "관리자 권한이 필요합니다."
+
+
+class SessionAccessDeniedError(AppHTTPException):
+    status_code = 403
+    error_code = "SESSION_ACCESS_DENIED"
+    detail = "접근 권한이 없습니다."
+
+
+# 404
 class NotFoundError(AppHTTPException):
     status_code = 404
     error_code = "NOT_FOUND"
     detail = "Not Found"
 
 
+class UserNotFoundError(AppHTTPException):
+    status_code = 404
+    error_code = "USER_NOT_FOUND"
+    detail = "사용자를 찾을 수 없습니다."
+
+
+class SessionNotFoundError(AppHTTPException):
+    status_code = 404
+    error_code = "SESSION_NOT_FOUND"
+    detail = "세션을 찾을 수 없습니다."
+
+
+# 409
 class ConflictError(AppHTTPException):
     status_code = 409
     error_code = "CONFLICT"
     detail = "Conflict"
 
 
+class EmailAlreadyExistsError(AppHTTPException):
+    status_code = 409
+    error_code = "EMAIL_ALREADY_EXISTS"
+    detail = "이미 사용 중인 이메일입니다."
+
+
+# 500
 class InternalServerError(AppHTTPException):
     status_code = 500
     error_code = "INTERNAL_ERROR"

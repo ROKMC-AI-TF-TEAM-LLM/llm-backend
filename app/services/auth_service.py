@@ -6,7 +6,12 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
-from app.core.exceptions import ForbiddenError, UnauthorizedError
+from app.core.exceptions import (
+    ApprovalPendingError,
+    ApprovalRejectedError,
+    InvalidCredentialsError,
+    TokenInvalidError,
+)
 from app.models.user import ApprovalStatus, User
 from app.services.user_service import _verify
 
@@ -33,14 +38,14 @@ def decode_token(token: str, expected_type: str) -> str:
     try:
         payload = jwt.decode(token, settings.jwt_secret_key, algorithms=[settings.jwt_algorithm])
     except JWTError:
-        raise UnauthorizedError("유효하지 않은 토큰입니다.")
+        raise TokenInvalidError()
 
     if payload.get("type") != expected_type:
-        raise UnauthorizedError("유효하지 않은 토큰입니다.")
+        raise TokenInvalidError()
 
     user_id: str | None = payload.get("sub")
     if not user_id:
-        raise UnauthorizedError("유효하지 않은 토큰입니다.")
+        raise TokenInvalidError()
 
     return user_id
 
@@ -49,19 +54,19 @@ async def _get_user_by_refresh_token(db: AsyncSession, token: str) -> User:
     user_id = decode_token(token, expected_type="refresh")
     user = await db.scalar(select(User).where(User.user_id == uuid.UUID(user_id)))
     if not user or user.refresh_token != token:
-        raise UnauthorizedError("유효하지 않은 토큰입니다.")
+        raise TokenInvalidError()
     return user
 
 
 async def login(db: AsyncSession, email: str, password: str) -> tuple[str, str]:
     user = await db.scalar(select(User).where(User.email == email))
     if not user or not _verify(password, user.password):
-        raise UnauthorizedError("이메일 또는 비밀번호가 올바르지 않습니다.")
+        raise InvalidCredentialsError()
 
     if user.status == ApprovalStatus.pending:
-        raise ForbiddenError("승인 대기 중인 계정입니다.")
+        raise ApprovalPendingError()
     if user.status == ApprovalStatus.rejected:
-        raise ForbiddenError("승인이 거절된 계정입니다.")
+        raise ApprovalRejectedError()
 
     user_id = str(user.user_id)
     access_token = create_access_token(user_id, user.role.value)

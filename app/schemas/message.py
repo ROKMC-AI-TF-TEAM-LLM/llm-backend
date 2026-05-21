@@ -11,10 +11,13 @@ class ChatRequest(BaseModel):
 
 
 class MessageResponse(BaseModel):
-    message_id: uuid.UUID
-    session_id: uuid.UUID
     role: RoleEnum
     content: str
     created_at: datetime
 
     model_config = {"from_attributes": True}
+
+class MessageListResponse(BaseModel):
+    session_id: uuid.UUID
+    messages: list[MessageResponse]
+

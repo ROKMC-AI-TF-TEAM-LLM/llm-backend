@@ -5,7 +5,7 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
-from app.core.exceptions import ForbiddenError, UnauthorizedError
+from app.core.exceptions import AdminRequiredError, TokenInvalidError
 from app.models.user import User, UserRole
 from app.services import auth_service, user_service
 
@@ -20,12 +20,12 @@ async def get_current_user(
     try:
         return await user_service.get_user(db, uuid.UUID(user_id))
     except Exception:
-        raise UnauthorizedError("유효하지 않은 토큰입니다.")
+        raise TokenInvalidError()
 
 
 async def get_current_admin(
     current_user: User = Depends(get_current_user),
 ) -> User:
     if current_user.role != UserRole.admin:
-        raise ForbiddenError("관리자 권한이 필요합니다.")
+        raise AdminRequiredError()
     return current_user

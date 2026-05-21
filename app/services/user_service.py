@@ -4,7 +4,7 @@ import bcrypt
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.exceptions import ConflictError, NotFoundError
+from app.core.exceptions import EmailAlreadyExistsError, UserNotFoundError
 from app.models.user import ApprovalStatus, User
 from app.schemas.user import UserCreate, UserUpdate
 
@@ -20,7 +20,7 @@ def _verify(plain: str, hashed: str) -> bool:
 async def create_user(db: AsyncSession, data: UserCreate) -> User:
     existing = await db.scalar(select(User).where(User.email == data.email))
     if existing:
-        raise ConflictError("이미 사용 중인 이메일입니다.")
+        raise EmailAlreadyExistsError()
 
     user = User(email=data.email, password=_hash(data.password))
     db.add(user)
@@ -32,7 +32,7 @@ async def create_user(db: AsyncSession, data: UserCreate) -> User:
 async def get_user(db: AsyncSession, user_id: uuid.UUID) -> User:
     user = await db.scalar(select(User).where(User.user_id == user_id))
     if not user:
-        raise NotFoundError("사용자를 찾을 수 없습니다.")
+        raise UserNotFoundError()
     return user
 
 

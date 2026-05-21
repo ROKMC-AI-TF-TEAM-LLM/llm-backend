@@ -3,7 +3,7 @@ import uuid
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.exceptions import ForbiddenError, NotFoundError
+from app.core.exceptions import SessionAccessDeniedError, SessionNotFoundError
 from app.models.session import Session
 from app.schemas.session import SessionCreate, SessionUpdate
 
@@ -28,9 +28,9 @@ async def get_sessions(db: AsyncSession, user_id: uuid.UUID) -> list[Session]:
 async def _get_session_owned(db: AsyncSession, session_id: uuid.UUID, user_id: uuid.UUID) -> Session:
     session = await db.scalar(select(Session).where(Session.session_id == session_id))
     if not session:
-        raise NotFoundError("세션을 찾을 수 없습니다.")
+        raise SessionNotFoundError()
     if session.user_id != user_id:
-        raise ForbiddenError("접근 권한이 없습니다.")
+        raise SessionAccessDeniedError()
     return session
 
 

@@ -8,20 +8,20 @@ from app.core.database import get_db
 from app.core.deps import get_current_user
 from app.models.user import User
 from app.schemas.common import ApiResponse
-from app.schemas.message import ChatRequest, MessageResponse
+from app.schemas.message import ChatRequest, MessageListResponse
 from app.services import message_service
 
 router = APIRouter(prefix="/sessions", tags=["messages"])
 
 
-@router.get("/{session_id}/messages", response_model=ApiResponse[list[MessageResponse]])
+@router.get("/{session_id}/messages", response_model=ApiResponse[MessageListResponse])
 async def get_messages(
     session_id: uuid.UUID,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     messages = await message_service.get_messages(db, session_id, current_user.user_id)
-    return ApiResponse.ok([MessageResponse.model_validate(m) for m in messages])
+    return ApiResponse.ok(MessageListResponse(session_id=session_id, messages=messages))
 
 
 @router.post("/{session_id}/messages/stream")

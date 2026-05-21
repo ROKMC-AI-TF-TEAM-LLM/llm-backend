@@ -9,7 +9,7 @@ from app.core.database import Base
 
 
 class UserRole(str, enum.Enum):
-    uaser = "user"
+    user = "user"
     admin = "admin"
 
 
@@ -25,9 +25,10 @@ class User(Base):
     user_id: Mapped[uuid.UUID] = mapped_column(
         primary_key=True, default=uuid.uuid4
     )
+    name: Mapped[str] = mapped_column(String(100), nullable=False)
     email: Mapped[str] = mapped_column(String(255), unique=True, nullable=False)
     password: Mapped[str] = mapped_column(String(255), nullable=False)
-    role: Mapped[UserRole] = mapped_column(Enum(UserRole), nullable=False, default=UserRole.uaser)
+    role: Mapped[UserRole] = mapped_column(Enum(UserRole), nullable=False, default=UserRole.user)
     status: Mapped[ApprovalStatus] = mapped_column(
         Enum(ApprovalStatus), nullable=False, default=ApprovalStatus.pending
     )

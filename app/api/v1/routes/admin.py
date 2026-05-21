@@ -31,3 +31,21 @@ async def reject_user(
 ):
     user = await user_service.reject_user(db, user_id)
     return ApiResponse.ok(UserResponse.model_validate(user))
+
+@router.get("/users/{user_id}", response_model=ApiResponse[UserResponse])
+async def get_user(
+    user_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(get_current_admin),
+):
+    user = await user_service.get_user(db, user_id)
+    return ApiResponse.ok(UserResponse.model_validate(user))
+
+@router.delete("/users/{user_id}")
+async def delet_user(
+    user_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(get_current_admin),
+):
+    await user_service.delete_user_user(db, user_id)
+    return ApiResponse.ok()

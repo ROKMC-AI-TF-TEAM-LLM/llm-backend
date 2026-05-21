@@ -6,8 +6,8 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
-from app.core.exceptions import UnauthorizedError
-from app.models.user import User
+from app.core.exceptions import ForbiddenError, UnauthorizedError
+from app.models.user import ApprovalStatus, User
 from app.services.user_service import _verify
 
 
@@ -57,6 +57,11 @@ async def login(db: AsyncSession, email: str, password: str) -> tuple[str, str]:
     user = await db.scalar(select(User).where(User.email == email))
     if not user or not _verify(password, user.password):
         raise UnauthorizedError("이메일 또는 비밀번호가 올바르지 않습니다.")
+
+    if user.status == ApprovalStatus.pending:
+        raise ForbiddenError("승인 대기 중인 계정입니다.")
+    if user.status == ApprovalStatus.rejected:
+        raise ForbiddenError("승인이 거절된 계정입니다.")
 
     user_id = str(user.user_id)
     access_token = create_access_token(user_id, user.role.value)

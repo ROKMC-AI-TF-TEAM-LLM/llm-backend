@@ -5,7 +5,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.exceptions import ConflictError, NotFoundError
-from app.models.user import User
+from app.models.user import ApprovalStatus, User
 from app.schemas.user import UserCreate, UserUpdate
 
 
@@ -53,3 +53,19 @@ async def delete_user(db: AsyncSession, user_id: uuid.UUID) -> None:
     user = await get_user(db, user_id)
     await db.delete(user)
     await db.commit()
+
+
+async def approve_user(db: AsyncSession, user_id: uuid.UUID) -> User:
+    user = await get_user(db, user_id)
+    user.status = ApprovalStatus.approved
+    await db.commit()
+    await db.refresh(user)
+    return user
+
+
+async def reject_user(db: AsyncSession, user_id: uuid.UUID) -> User:
+    user = await get_user(db, user_id)
+    user.status = ApprovalStatus.rejected
+    await db.commit()
+    await db.refresh(user)
+    return user

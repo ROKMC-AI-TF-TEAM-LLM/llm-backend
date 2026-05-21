@@ -5,7 +5,7 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
-from app.api.v1.routes import auth, health, message, session, user
+from app.api.v1.routes import admin, auth, health, message, session, user
 from app.core.config import settings
 from app.core.exceptions import AppHTTPException
 from app.core.logger import get_logger
@@ -46,9 +46,10 @@ app.add_middleware(
 
 @app.exception_handler(AppHTTPException)
 async def app_http_exception_handler(_request: Request, exc: AppHTTPException):
+    from app.schemas.common import ApiResponse
     return JSONResponse(
         status_code=exc.status_code,
-        content={"error_code": exc.error_code, "detail": exc.detail},
+        content=ApiResponse.fail(code=exc.error_code, detail=exc.detail, status_code=exc.status_code).model_dump(),
     )
 
 
@@ -57,3 +58,4 @@ app.include_router(auth.router, prefix="/api/v1")
 app.include_router(user.router, prefix="/api/v1")
 app.include_router(session.router, prefix="/api/v1")
 app.include_router(message.router, prefix="/api/v1")
+app.include_router(admin.router, prefix="/api/v1")

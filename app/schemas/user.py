@@ -3,7 +3,7 @@ from datetime import datetime
 
 from pydantic import BaseModel, EmailStr
 
-from app.models.user import UserRole
+from app.models.user import ApprovalStatus, UserRole
 
 
 class UserCreate(BaseModel):
@@ -20,6 +20,7 @@ class UserResponse(BaseModel):
     user_id: uuid.UUID
     email: str
     role: UserRole
+    status: ApprovalStatus
     created_at: datetime
     updated_at: datetime
 

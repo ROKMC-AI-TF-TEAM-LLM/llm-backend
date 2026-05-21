@@ -13,6 +13,12 @@ class UserRole(str, enum.Enum):
     admin = "admin"
 
 
+class ApprovalStatus(str, enum.Enum):
+    pending = "pending"
+    approved = "approved"
+    rejected = "rejected"
+
+
 class User(Base):
     __tablename__ = "users"
 
@@ -22,6 +28,9 @@ class User(Base):
     email: Mapped[str] = mapped_column(String(255), unique=True, nullable=False)
     password: Mapped[str] = mapped_column(String(255), nullable=False)
     role: Mapped[UserRole] = mapped_column(Enum(UserRole), nullable=False, default=UserRole.user)
+    status: Mapped[ApprovalStatus] = mapped_column(
+        Enum(ApprovalStatus), nullable=False, default=ApprovalStatus.pending
+    )
     refresh_token: Mapped[str | None] = mapped_column(String(512), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),

@@ -60,18 +60,15 @@ async def chat_stream(
     llm_messages = _to_llm_messages(list(history_result.all()))
     logger.info("이전 대화 이력 %d건 전송", len(llm_messages))
 
-    db.add(Message(session_id=session_id, role=RoleEnum.human, content=question))
-    await db.commit()
-    logger.info("유저 메시지 저장 완료")
-
     accumulated: list[str] = []
     async for raw in llm_client.stream_chat(question, llm_messages):
         if raw == "[DONE]":
             content = "".join(accumulated)
+            db.add(Message(session_id=session_id, role=RoleEnum.human, content=question))
             db.add(Message(session_id=session_id, role=RoleEnum.ai, content=content))
             session.updated_at = datetime.now(timezone.utc)
             await db.commit()
-            logger.info("어시스턴트 응답 저장 완료 length=%d", len(content))
+            logger.info("메시지 저장 완료 — human + ai length=%d", len(content))
             yield "data: [DONE]\n\n"
             return
 

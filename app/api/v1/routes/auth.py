@@ -10,7 +10,7 @@ from app.services import auth_service, user_service
 router = APIRouter(prefix="/auth", tags=["auth"])
 
 
-@router.post("/signup", response_model=ApiResponse[UserResponse], status_code=status.HTTP_201_CREATED)
+@router.post("/signup", status_code=status.HTTP_201_CREATED)
 async def signup(data: UserCreate, db: AsyncSession = Depends(get_db)):
     user = await user_service.create_user(db, data)
     return ApiResponse.ok(status_code=201)

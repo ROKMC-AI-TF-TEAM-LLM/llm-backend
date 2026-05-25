@@ -5,7 +5,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.exceptions import EmailAlreadyExistsError, UserNotFoundError
-from app.models.user import ApprovalStatus, User
+from app.models.user import ApprovalStatus, User, UserRole
 from app.schemas.user import UserCreate, UserUpdate
 
 
@@ -55,6 +55,23 @@ async def delete_user(db: AsyncSession, user_id: uuid.UUID) -> None:
     user = await get_user(db, user_id)
     await db.delete(user)
     await db.commit()
+
+
+async def get_all_users(db: AsyncSession) -> dict:
+    result = await db.scalars(select(User).order_by(User.created_at.asc()))
+    all_users = list(result.all())
+
+    admins = [u for u in all_users if u.role == UserRole.admin]
+    regular = [u for u in all_users if u.role != UserRole.admin]
+
+    return {
+        "admins": admins,
+        "users": {
+            "pending":  [u for u in regular if u.status == ApprovalStatus.pending],
+            "approved": [u for u in regular if u.status == ApprovalStatus.approved],
+            "rejected": [u for u in regular if u.status == ApprovalStatus.rejected],
+        },
+    }
 
 
 async def approve_user(db: AsyncSession, user_id: uuid.UUID) -> User:

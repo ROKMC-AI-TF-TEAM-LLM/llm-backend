@@ -18,3 +18,9 @@ class SessionResponse(BaseModel):
     updated_at: datetime
 
     model_config = {"from_attributes": True}
+
+
+class SessionPageResponse(BaseModel):
+    items: list[SessionResponse]
+    next_cursor: datetime | None
+    has_next: bool

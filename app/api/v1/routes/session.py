@@ -1,4 +1,5 @@
 import uuid
+from datetime import datetime
 
 from fastapi import APIRouter, Depends, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -7,7 +8,7 @@ from app.core.database import get_db
 from app.core.deps import get_current_user
 from app.models.user import User
 from app.schemas.common import ApiResponse
-from app.schemas.session import SessionCreate, SessionResponse, SessionUpdate
+from app.schemas.session import SessionCreate, SessionPageResponse, SessionResponse, SessionUpdate
 from app.services import session_service
 
 router = APIRouter(prefix="/sessions", tags=["sessions"])
@@ -23,13 +24,22 @@ async def create_session(
     return ApiResponse.ok(SessionResponse.model_validate(session), status_code=201)
 
 
-@router.get("", response_model=ApiResponse[list[SessionResponse]])
+@router.get("", response_model=ApiResponse[SessionPageResponse])
 async def get_sessions(
+    cursor: datetime | None = Query(None),
+    size: int = Query(20, ge=1, le=100),
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    sessions = await session_service.get_sessions(db, current_user.user_id)
-    return ApiResponse.ok([SessionResponse.model_validate(s) for s in sessions])
+    sessions, has_next = await session_service.get_sessions(
+        db, current_user.user_id, cursor=cursor, size=size
+    )
+    next_cursor = sessions[-1].updated_at if has_next and sessions else None
+    return ApiResponse.ok(SessionPageResponse(
+        items=[SessionResponse.model_validate(s) for s in sessions],
+        next_cursor=next_cursor,
+        has_next=has_next,
+    ))
 
 
 @router.get("/search", response_model=ApiResponse[list[SessionResponse]])

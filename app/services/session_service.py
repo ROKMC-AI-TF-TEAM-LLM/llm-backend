@@ -1,4 +1,5 @@
 import uuid
+from datetime import datetime
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -16,13 +17,25 @@ async def create_session(db: AsyncSession, user_id: uuid.UUID, data: SessionCrea
     return session
 
 
-async def get_sessions(db: AsyncSession, user_id: uuid.UUID) -> list[Session]:
-    result = await db.scalars(
+async def get_sessions(
+    db: AsyncSession,
+    user_id: uuid.UUID,
+    cursor: datetime | None = None,
+    size: int = 20,
+) -> tuple[list[Session], bool]:
+    query = (
         select(Session)
         .where(Session.user_id == user_id)
         .order_by(Session.updated_at.desc())
+        .limit(size + 1)
     )
-    return list(result.all())
+    if cursor:
+        query = query.where(Session.updated_at < cursor)
+
+    result = await db.scalars(query)
+    sessions = list(result.all())
+    has_next = len(sessions) > size
+    return sessions[:size], has_next
 
 
 async def search_sessions(db: AsyncSession, user_id: uuid.UUID, q: str) -> list[Session]:

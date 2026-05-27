@@ -21,15 +21,12 @@ async def stream_chat(question: str, messages: list[dict]) -> AsyncGenerator[str
                 logger.debug("[RAW HTTP CHUNK] %r", chunk)
                 buffer += chunk
 
-                # 이벤트 경계: \n\ndata: (청크 내부 \n\n과 구별 가능)
                 while "\n\ndata: " in buffer:
                     sep = buffer.find("\n\ndata: ")
                     value = buffer[len("data: "):sep]
                     buffer = "data: " + buffer[sep + len("\n\ndata: "):]
-                    # logger.debug("[PARSED EVENT] %r", value)
                     yield value
 
-            # 마지막 이벤트 ([DONE] 또는 [ERROR])
             if buffer.startswith("data: "):
                 value = buffer[len("data: "):].rstrip("\n")
                 if value:

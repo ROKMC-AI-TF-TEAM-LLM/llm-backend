@@ -34,7 +34,6 @@ def do_run_migrations(connection):
 
 async def run_migrations_online() -> None:
     engine = create_async_engine(settings.database_url)
-    # engine = create_async_engine(settings.database_url, connecet_args ={"ssl" : False})
     async with engine.connect() as connection:
         await connection.run_sync(do_run_migrations)
     await engine.dispose()

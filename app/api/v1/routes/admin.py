@@ -1,6 +1,6 @@
 import uuid
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
@@ -15,10 +15,12 @@ router = APIRouter(prefix="/admin", tags=["admin"])
 
 @router.get("/users", response_model=ApiResponse[AdminUserListResponse])
 async def get_all_users(
+    page: int = Query(1, ge=1),
+    size: int = Query(20, ge=1, le=100),
     db: AsyncSession = Depends(get_db),
     _: User = Depends(get_current_admin),
 ):
-    data = await user_service.get_all_users(db)
+    data = await user_service.get_all_users(db, page=page, size=size)
     return ApiResponse.ok(AdminUserListResponse(**data), status_code=200)
 
 

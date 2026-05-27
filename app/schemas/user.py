@@ -39,9 +39,17 @@ class UsersByStatus(BaseModel):
     rejected: list[AdminUserItem]
 
 
+class PaginationMeta(BaseModel):
+    total: int
+    page: int
+    size: int
+    total_pages: int
+
+
 class AdminUserListResponse(BaseModel):
     admins: list[AdminUserItem]
     users: UsersByStatus
+    pagination: PaginationMeta
 
 
 class UserResponse(BaseModel):

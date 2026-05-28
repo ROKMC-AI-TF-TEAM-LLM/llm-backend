@@ -1,35 +1,29 @@
 from contextlib import asynccontextmanager
 
-import httpx
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from app.api.v1.routes import admin, auth, health, message, session, user
-from app.core.config import settings
 from app.core.exceptions import AppHTTPException
 from app.core.logger import get_logger
+from app.services.health_service import check_llm_server
 
 logger = get_logger(__name__)
 
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
-    await _check_llm_server()
+    from app.core.database import AsyncSessionLocal
+    from app.services.health_service import check_db
+
+    async with AsyncSessionLocal() as db:
+        db_ok = await check_db(db)
+    logger.info("DB 연결 확인 완료") if db_ok else logger.warning("DB에 연결할 수 없습니다")
+
+    llm_ok = await check_llm_server()
+    logger.info("LLM 서버 연결 확인 완료") if llm_ok else None
     yield
-
-
-async def _check_llm_server():
-    url = f"{settings.llm_server_url}/api/health"
-    try:
-        async with httpx.AsyncClient(timeout=5) as client:
-            response = await client.get(url)
-            response.raise_for_status()
-        logger.info("LLM 서버 연결 확인 완료 (%s)", url)
-    except httpx.HTTPStatusError as e:
-        logger.warning("LLM 서버 응답 오류 status=%d url=%s", e.response.status_code, url)
-    except Exception:
-        logger.warning("LLM 서버에 연결할 수 없습니다 url=%s", url)
 
 
 app = FastAPI(title="LLM Backend", lifespan=lifespan)

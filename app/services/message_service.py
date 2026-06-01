@@ -102,5 +102,5 @@ async def chat_stream(
             yield f"data: {raw}\n\n"
             continue
 
-        accumulated.append(raw)
+        accumulated.append(event["content"] if event and event.get("type") == "text" else "")
         yield f"data: {raw}\n\n"

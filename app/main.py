@@ -8,6 +8,7 @@ from fastapi.responses import JSONResponse
 from app.api.v1.routes import admin, auth, document, health, message, session, user
 from app.core.exceptions import AppHTTPException
 from app.core.logger import get_logger
+from app.schemas.common import ApiResponse
 from app.services.health_service import check_llm_server
 
 logger = get_logger(__name__)
@@ -41,7 +42,6 @@ app.add_middleware(
 
 @app.exception_handler(AppHTTPException)
 async def app_http_exception_handler(_request: Request, exc: AppHTTPException):
-    from app.schemas.common import ApiResponse
     return JSONResponse(
         status_code=exc.status_code,
         content=ApiResponse.fail(code=exc.error_code, detail=exc.detail, status_code=exc.status_code).model_dump(),
@@ -50,7 +50,6 @@ async def app_http_exception_handler(_request: Request, exc: AppHTTPException):
 
 @app.exception_handler(RequestValidationError)
 async def validation_exception_handler(_request: Request, exc: RequestValidationError):
-    from app.schemas.common import ApiResponse
     detail = "; ".join(
         f"{' -> '.join(str(l) for l in e['loc'])}: {e['msg']}" for e in exc.errors()
     )
@@ -62,7 +61,6 @@ async def validation_exception_handler(_request: Request, exc: RequestValidation
 
 @app.exception_handler(HTTPException)
 async def http_exception_handler(_request: Request, exc: HTTPException):
-    from app.schemas.common import ApiResponse
     return JSONResponse(
         status_code=exc.status_code,
         content=ApiResponse.fail(code="HTTP_ERROR", detail=exc.detail, status_code=exc.status_code).model_dump(),

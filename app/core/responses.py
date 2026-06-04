@@ -93,3 +93,11 @@ R_422 = {
         validation_error=_ex(422, "VALIDATION_ERROR", "요청 파라미터 유효성 검사 실패"),
     )
 }
+
+# 502
+R_502_LLM = {
+    502: _resp(
+        "LLM 서버 오류",
+        llm_server_error=_ex(502, "LLM_SERVER_ERROR", "LLM 서버 오류가 발생했습니다."),
+    )
+}

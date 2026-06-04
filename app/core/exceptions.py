@@ -98,6 +98,13 @@ class EmailAlreadyExistsError(AppHTTPException):
     detail = "이미 사용 중인 이메일입니다."
 
 
+# 502
+class LLMServerError(AppHTTPException):
+    status_code = 502
+    error_code = "LLM_SERVER_ERROR"
+    detail = "LLM 서버 오류가 발생했습니다."
+
+
 # 500
 class InternalServerError(AppHTTPException):
     status_code = 500

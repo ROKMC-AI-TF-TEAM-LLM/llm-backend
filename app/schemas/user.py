@@ -24,34 +24,6 @@ class UserProfileResponse(BaseModel):
     model_config = {"from_attributes": True}
 
 
-class AdminUserItem(BaseModel):
-    user_id: uuid.UUID
-    name: str
-    email: str
-    created_at: datetime
-
-    model_config = {"from_attributes": True}
-
-
-class UsersByStatus(BaseModel):
-    pending: list[AdminUserItem]
-    approved: list[AdminUserItem]
-    rejected: list[AdminUserItem]
-
-
-class PaginationMeta(BaseModel):
-    total: int
-    page: int
-    size: int
-    total_pages: int
-
-
-class AdminUserListResponse(BaseModel):
-    admins: list[AdminUserItem]
-    users: UsersByStatus
-    pagination: PaginationMeta
-
-
 class AdminUserItemWithStatus(BaseModel):
     user_id: uuid.UUID
     name: str

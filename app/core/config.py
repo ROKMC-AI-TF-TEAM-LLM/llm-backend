@@ -7,6 +7,7 @@ class Settings(BaseSettings):
     log_level: str = "INFO"
 
     database_url: str = "postgresql+asyncpg://user:password@localhost:5432/llm_db"
+    db_disable_ssl: bool = False
 
     jwt_secret_key: str = "change-here"
     jwt_algorithm: str = "HS256"

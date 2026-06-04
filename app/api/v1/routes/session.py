@@ -6,6 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
 from app.core.deps import get_current_user
+from app.core.responses import R_401, R_403_SESSION, R_404_SESSION, R_422
 from app.models.user import User
 from app.schemas.common import ApiResponse
 from app.schemas.session import SessionCreate, SessionPageResponse, SessionResponse, SessionUpdate
@@ -14,7 +15,14 @@ from app.services import session_service
 router = APIRouter(prefix="/sessions", tags=["sessions"])
 
 
-@router.post("", response_model=ApiResponse[SessionResponse], status_code=status.HTTP_201_CREATED)
+@router.post(
+    "",
+    response_model=ApiResponse[SessionResponse],
+    status_code=status.HTTP_201_CREATED,
+    summary="세션 생성",
+    description="새로운 채팅 세션을 생성합니다.",
+    responses={**R_401, **R_422},
+)
 async def create_session(
     data: SessionCreate,
     current_user: User = Depends(get_current_user),
@@ -24,10 +32,21 @@ async def create_session(
     return ApiResponse.ok(SessionResponse.model_validate(session), status_code=201)
 
 
-@router.get("", response_model=ApiResponse[SessionPageResponse])
+@router.get(
+    "",
+    response_model=ApiResponse[SessionPageResponse],
+    summary="세션 목록 조회",
+    description=(
+        "내 채팅 세션 목록을 최근 수정순으로 조회합니다. cursor 기반 무한 스크롤을 지원합니다.\n\n"
+        "- 첫 요청: cursor 없이 호출\n"
+        "- 다음 페이지: 응답의 `next_cursor` 값을 cursor로 전달\n"
+        "- `has_next`가 false이면 마지막 페이지"
+    ),
+    responses={**R_401, **R_422},
+)
 async def get_sessions(
-    cursor: datetime | None = Query(None),
-    size: int = Query(20, ge=1, le=100),
+    cursor: datetime | None = Query(None, description="이전 응답의 next_cursor 값"),
+    size: int = Query(20, ge=1, le=100, description="한 번에 가져올 세션 수"),
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
@@ -39,12 +58,18 @@ async def get_sessions(
         items=[SessionResponse.model_validate(s) for s in sessions],
         next_cursor=next_cursor,
         has_next=has_next,
-    ))
+    ), status_code=200)
 
 
-@router.get("/search", response_model=ApiResponse[list[SessionResponse]])
+@router.get(
+    "/search",
+    response_model=ApiResponse[list[SessionResponse]],
+    summary="세션 검색",
+    description="제목 키워드로 채팅 세션을 검색합니다. (대소문자 구분 없음)",
+    responses={**R_401, **R_422},
+)
 async def search_sessions(
-    q: str = Query(..., min_length=1),
+    q: str = Query(..., min_length=1, description="검색 키워드"),
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
@@ -52,7 +77,13 @@ async def search_sessions(
     return ApiResponse.ok([SessionResponse.model_validate(s) for s in sessions], status_code=200)
 
 
-@router.patch("/{session_id}", response_model=ApiResponse[SessionResponse])
+@router.patch(
+    "/{session_id}",
+    response_model=ApiResponse[SessionResponse],
+    summary="세션 제목 수정",
+    description="채팅 세션의 제목을 수정합니다. 본인의 세션만 수정 가능합니다.",
+    responses={**R_401, **R_403_SESSION, **R_404_SESSION, **R_422},
+)
 async def update_session(
     session_id: uuid.UUID,
     data: SessionUpdate,
@@ -60,14 +91,20 @@ async def update_session(
     db: AsyncSession = Depends(get_db),
 ):
     session = await session_service.update_session(db, session_id, current_user.user_id, data)
-    return ApiResponse.ok(SessionResponse.model_validate(session))
+    return ApiResponse.ok(SessionResponse.model_validate(session), status_code=200)
 
 
-@router.delete("/{session_id}", response_model=ApiResponse[None])
+@router.delete(
+    "/{session_id}",
+    response_model=ApiResponse[None],
+    summary="세션 삭제",
+    description="채팅 세션을 삭제합니다. 본인의 세션만 삭제 가능하며, 하위 메시지도 함께 삭제됩니다.",
+    responses={**R_401, **R_403_SESSION, **R_404_SESSION},
+)
 async def delete_session(
     session_id: uuid.UUID,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     await session_service.delete_session(db, session_id, current_user.user_id)
-    return ApiResponse.ok()
+    return ApiResponse.ok(status_code=200)

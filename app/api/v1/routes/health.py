@@ -14,8 +14,13 @@ class HealthResponse(BaseModel):
     llm_server: bool
 
 
-@router.get("/health", response_model=ApiResponse[HealthResponse])
+@router.get(
+    "/health",
+    response_model=ApiResponse[HealthResponse],
+    summary="서버 상태 확인",
+    description="DB 연결 상태와 LLM 서버 연결 상태를 반환합니다.",
+)
 async def health(db: AsyncSession = Depends(get_db)):
     db_ok = await check_db(db)
     llm_ok = await check_llm_server()
-    return ApiResponse.ok(HealthResponse(db=db_ok, llm_server=llm_ok))
+    return ApiResponse.ok(HealthResponse(db=db_ok, llm_server=llm_ok), status_code=200)

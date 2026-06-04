@@ -52,6 +52,23 @@ class AdminUserListResponse(BaseModel):
     pagination: PaginationMeta
 
 
+class AdminUserItemWithStatus(BaseModel):
+    user_id: uuid.UUID
+    name: str
+    email: str
+    role: UserRole
+    status: ApprovalStatus
+    created_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+class AdminUserPageResponse(BaseModel):
+    items: list[AdminUserItemWithStatus]
+    next_cursor: datetime | None
+    has_next: bool
+
+
 class UserResponse(BaseModel):
     user_id: uuid.UUID
     name: str

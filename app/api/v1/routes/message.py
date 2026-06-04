@@ -6,6 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
 from app.core.deps import get_current_user
+from app.core.responses import R_401, R_403_SESSION, R_404_SESSION, R_422
 from app.models.user import User
 from app.schemas.common import ApiResponse
 from app.schemas.message import ChatRequest, MessageListResponse
@@ -14,17 +15,35 @@ from app.services import message_service
 router = APIRouter(prefix="/sessions", tags=["messages"])
 
 
-@router.get("/{session_id}/messages", response_model=ApiResponse[MessageListResponse])
+@router.get(
+    "/{session_id}/messages",
+    response_model=ApiResponse[MessageListResponse],
+    summary="메시지 목록 조회",
+    description="세션의 전체 대화 기록을 시간순으로 조회합니다. AI 응답 메시지에는 출처(sources) 정보가 포함됩니다.",
+    responses={**R_401, **R_403_SESSION, **R_404_SESSION},
+)
 async def get_messages(
     session_id: uuid.UUID,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     messages = await message_service.get_messages(db, session_id, current_user.user_id)
-    return ApiResponse.ok(MessageListResponse(session_id=session_id, messages=messages))
+    return ApiResponse.ok(MessageListResponse(session_id=session_id, messages=messages), status_code=200)
 
 
-@router.post("/{session_id}/messages/stream")
+@router.post(
+    "/{session_id}/messages/stream",
+    summary="실시간 채팅 스트리밍",
+    description=(
+        "LLM에 질문을 전송하고 응답을 Server-Sent Events(SSE) 형식으로 스트리밍합니다.\n\n"
+        "**이벤트 타입**\n"
+        "- 텍스트 토큰: 일반 문자열 (토큰 단위 스트리밍)\n"
+        "- `{\"type\": \"sources\", \"items\": [...]}`: 참조 문서 출처\n"
+        "- `{\"type\": \"done\"}`: 응답 완료\n"
+        "- `{\"type\": \"error\", \"message\": \"...\"}`: 오류 발생"
+    ),
+    responses={**R_401, **R_403_SESSION, **R_404_SESSION, **R_422},
+)
 async def chat_stream(
     session_id: uuid.UUID,
     body: ChatRequest,

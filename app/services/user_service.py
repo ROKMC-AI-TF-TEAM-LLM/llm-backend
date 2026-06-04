@@ -1,8 +1,8 @@
-import math
 import uuid
+from datetime import datetime
 
 import bcrypt
-from sqlalchemy import func, select
+from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.exceptions import EmailAlreadyExistsError, UserNotFoundError
@@ -58,41 +58,29 @@ async def delete_user(db: AsyncSession, user_id: uuid.UUID) -> None:
     await db.commit()
 
 
-async def get_all_users(db: AsyncSession, page: int = 1, size: int = 20) -> dict:
-    total = await db.scalar(
-        select(func.count(User.user_id)).where(User.role != UserRole.admin)
-    )
-    total = total or 0
-
-    admin_result = await db.scalars(
-        select(User).where(User.role == UserRole.admin).order_by(User.created_at.asc())
-    )
-    admins = list(admin_result.all())
-
-    offset = (page - 1) * size
-    regular_result = await db.scalars(
-        select(User)
-        .where(User.role != UserRole.admin)
-        .order_by(User.created_at.asc())
-        .offset(offset)
-        .limit(size)
-    )
-    regular = list(regular_result.all())
-
-    return {
-        "admins": admins,
-        "users": {
-            "pending":  [u for u in regular if u.status == ApprovalStatus.pending],
-            "approved": [u for u in regular if u.status == ApprovalStatus.approved],
-            "rejected": [u for u in regular if u.status == ApprovalStatus.rejected],
-        },
-        "pagination": {
-            "total": total,
-            "page": page,
-            "size": size,
-            "total_pages": math.ceil(total / size) if size > 0 else 0,
-        },
-    }
+async def get_users_paged(
+    db: AsyncSession,
+    role: UserRole | None = None,
+    status: ApprovalStatus | None = None,
+    search: str | None = None,
+    cursor: datetime | None = None,
+    size: int = 20,
+) -> tuple[list[User], bool]:
+    query = select(User).order_by(User.created_at.desc()).limit(size + 1)
+    if cursor:
+        query = query.where(User.created_at < cursor)
+    if role is not None:
+        query = query.where(User.role == role)
+    if status is not None:
+        query = query.where(User.status == status)
+    if search:
+        query = query.where(
+            or_(User.name.ilike(f"%{search}%"), User.email.ilike(f"%{search}%"))
+        )
+    result = await db.scalars(query)
+    users = list(result.all())
+    has_next = len(users) > size
+    return users[:size], has_next
 
 
 async def approve_user(db: AsyncSession, user_id: uuid.UUID) -> User:

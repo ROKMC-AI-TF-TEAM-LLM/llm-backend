@@ -20,6 +20,7 @@ class UserUpdate(BaseModel):
 class UserProfileResponse(BaseModel):
     name: str
     email: str
+    role: UserRole
     created_at: datetime
 
     model_config = {"from_attributes": True}

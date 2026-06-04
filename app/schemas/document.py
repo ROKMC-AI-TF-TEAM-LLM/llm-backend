@@ -10,6 +10,8 @@ class DocumentItem(BaseModel):
 
 
 class DocumentListResponse(BaseModel):
-    items: list[DocumentItem]
+    documents: list[DocumentItem]
+    total: int
+    offset: int
+    limit: int
     has_more: bool
-    total: int | None = None

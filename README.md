@@ -19,30 +19,36 @@ llm-backend/
 │   │   ├── database.py                # SQLAlchemy 엔진, 세션
 │   │   ├── deps.py                    # 인증 의존성 (get_current_user, get_current_admin)
 │   │   ├── exceptions.py              # 커스텀 HTTP 예외 (세분화된 에러 코드)
+│   │   ├── responses.py               # Swagger 공통 에러 응답 예시
 │   │   └── logger.py                  # 로거
 │   ├── models/
 │   │   ├── user.py                    # User, UserRole, ApprovalStatus
 │   │   ├── session.py                 # Session
-│   │   └── message.py                 # Message, RoleEnum
+│   │   ├── message.py                 # Message, RoleEnum
+│   │   └── source.py                  # Source (메시지 출처)
 │   ├── schemas/
 │   │   ├── common.py                  # ApiResponse (공통 응답 래퍼)
-│   │   ├── user.py                    # UserCreate, UserUpdate, UserResponse
+│   │   ├── user.py                    # UserCreate, UserUpdate, UserResponse 등
 │   │   ├── auth.py                    # LoginRequest, TokenResponse 등
-│   │   ├── session.py                 # SessionCreate, SessionUpdate, SessionResponse
-│   │   └── message.py                 # ChatRequest, MessageResponse, MessageListResponse
+│   │   ├── session.py                 # SessionCreate, SessionResponse, SessionPageResponse
+│   │   ├── message.py                 # ChatRequest, MessageResponse, MessageListResponse
+│   │   └── document.py                # DocumentListResponse
 │   ├── services/
-│   │   ├── user_service.py            # 유저 CRUD, 승인/거절
 │   │   ├── auth_service.py            # JWT 발급/검증, 로그인
-│   │   ├── session_service.py         # 세션 CRUD
-│   │   ├── message_service.py         # 메시지 저장, LLM 스트리밍 오케스트레이션
+│   │   ├── user_service.py            # 유저 CRUD, 승인/거절
+│   │   ├── session_service.py         # 세션 CRUD, cursor 기반 페이지네이션
+│   │   ├── message_service.py         # 메시지 저장, LLM 스트리밍, 출처 저장
+│   │   ├── document_service.py        # LLM 서버 문서 목록 프록시
+│   │   ├── health_service.py          # DB / LLM 서버 헬스체크
 │   │   └── llm_client.py              # LLM 서버 HTTP 스트리밍 클라이언트
 │   └── api/v1/routes/
-│       ├── health.py                  # GET /health, /database
-│       ├── auth.py                    # POST /auth/signup, /login, /refresh, /logout
-│       ├── user.py                    # GET·PATCH·DELETE /users/{id}
-│       ├── session.py                 # POST·GET·PATCH·DELETE /sessions
-│       ├── message.py                 # GET /sessions/{id}/messages, POST /sessions/{id}/messages/stream
-│       └── admin.py                   # PATCH /admin/users/{id}/approve|reject
+│       ├── health.py                  # GET /health
+│       ├── auth.py                    # POST /auth/signup|login|refresh|logout
+│       ├── user.py                    # GET /users/me
+│       ├── session.py                 # CRUD /sessions
+│       ├── message.py                 # GET|POST /sessions/{id}/messages
+│       ├── admin.py                   # GET|PATCH|DELETE /admin/users
+│       └── document.py                # GET /documents
 ├── alembic/                           # DB 마이그레이션
 ├── main.py                            # 서버 실행 진입점
 ├── .env                               # 환경변수 (git 제외)
@@ -53,23 +59,25 @@ llm-backend/
 
 | Method | Path | 설명 | 인증 |
 |--------|------|------|------|
-| GET | `/api/v1/health` | 앱 상태 확인 | 불필요 |
-| GET | `/api/v1/database` | DB 연결 확인 | 불필요 |
+| GET | `/api/v1/health` | 서버·DB·LLM 연결 상태 확인 | 불필요 |
 | POST | `/api/v1/auth/signup` | 회원가입 (승인 대기 상태로 등록) | 불필요 |
 | POST | `/api/v1/auth/login` | 로그인 (승인된 계정만 가능) | 불필요 |
 | POST | `/api/v1/auth/refresh` | 액세스 토큰 재발급 | 불필요 |
-| POST | `/api/v1/auth/logout` | 로그아웃 | 불필요 |
-| GET | `/api/v1/users/{id}` | 유저 조회 | 필요 |
-| PATCH | `/api/v1/users/{id}` | 유저 수정 | 필요 |
-| DELETE | `/api/v1/users/{id}` | 유저 삭제 | 필요 |
+| POST | `/api/v1/auth/logout` | 로그아웃 (Refresh Token 무효화) | 불필요 |
+| GET | `/api/v1/users/me` | 내 정보 조회 | 필요 |
 | POST | `/api/v1/sessions` | 세션 생성 | 필요 |
-| GET | `/api/v1/sessions` | 세션 목록 | 필요 |
-| PATCH | `/api/v1/sessions/{id}` | 세션 이름 변경 | 필요 |
-| DELETE | `/api/v1/sessions/{id}` | 세션 삭제 | 필요 |
-| GET | `/api/v1/sessions/{id}/messages` | 메시지 이력 조회 | 필요 |
-| POST | `/api/v1/sessions/{id}/messages/stream` | LLM 스트리밍 채팅 | 필요 |
-| PATCH | `/api/v1/admin/users/{id}/approve` | 유저 승인 | 관리자 |
-| PATCH | `/api/v1/admin/users/{id}/reject` | 유저 거절 | 관리자 |
+| GET | `/api/v1/sessions` | 세션 목록 (cursor 기반 무한 스크롤) | 필요 |
+| GET | `/api/v1/sessions/search` | 세션 검색 | 필요 |
+| PATCH | `/api/v1/sessions/{id}` | 세션 제목 수정 | 필요 |
+| DELETE | `/api/v1/sessions/{id}` | 세션 삭제 (하위 메시지 함께 삭제) | 필요 |
+| GET | `/api/v1/sessions/{id}/messages` | 메시지 이력 조회 (출처 포함) | 필요 |
+| POST | `/api/v1/sessions/{id}/messages/stream` | LLM 스트리밍 채팅 (SSE) | 필요 |
+| GET | `/api/v1/documents` | RAG 문서 목록 (offset 기반 무한 스크롤) | 필요 |
+| GET | `/api/v1/admin/users` | 전체 회원 목록 (cursor 기반, 필터/검색) | 관리자 |
+| GET | `/api/v1/admin/users/{id}` | 회원 상세 조회 | 관리자 |
+| PATCH | `/api/v1/admin/users/{id}/approve` | 회원 가입 승인 | 관리자 |
+| PATCH | `/api/v1/admin/users/{id}/reject` | 회원 가입 거절 | 관리자 |
+| DELETE | `/api/v1/admin/users/{id}` | 회원 삭제 | 관리자 |
 
 ## 공통 응답 형식
 
@@ -111,6 +119,91 @@ llm-backend/
 | `USER_NOT_FOUND` | 404 | 사용자 없음 |
 | `SESSION_NOT_FOUND` | 404 | 세션 없음 |
 | `EMAIL_ALREADY_EXISTS` | 409 | 이메일 중복 |
+| `VALIDATION_ERROR` | 422 | 요청 파라미터 유효성 오류 |
+| `LLM_SERVER_ERROR` | 502 | LLM 서버 연결 오류 |
+
+## 무한 스크롤 페이지네이션
+
+### 세션 목록 — cursor 기반
+
+`updated_at` 기준으로 최신순 정렬. 세션 업데이트 시 순서가 바뀌어도 중복/누락 없음.
+
+```
+첫 요청:  GET /api/v1/sessions?size=20
+다음 요청: GET /api/v1/sessions?cursor={next_cursor}&size=20
+종료 조건: has_next == false
+```
+
+```json
+{
+  "items": [ { "session_id": "...", "title": "...", "updated_at": "..." } ],
+  "next_cursor": "2025-05-10T12:34:56.789Z",
+  "has_next": true
+}
+```
+
+### 문서 목록 — offset 기반
+
+```
+첫 요청:  GET /api/v1/documents?offset=0&limit=20
+다음 요청: GET /api/v1/documents?offset=20&limit=20
+종료 조건: has_more == false
+```
+
+### 관리자 회원 목록 — cursor 기반
+
+`role`, `status`, `search` 필터 조합 가능.
+
+```
+GET /api/v1/admin/users?role=user&status=pending&search=홍길동&size=20
+```
+
+## LLM 스트리밍 응답 형식
+
+`POST /api/v1/sessions/{id}/messages/stream`은 `text/event-stream` (SSE) 형식으로 응답합니다.
+
+```
+// 텍스트 토큰 (토큰 단위 스트리밍)
+data: 안녕
+
+data: 하세요
+
+// 참조 문서 출처
+data: {"type": "sources", "items": [{"name": "doc.pdf", "page": "3"}]}
+
+// 응답 완료
+data: {"type": "done"}
+
+// 오류 발생
+data: {"type": "error", "message": "오류 내용"}
+```
+
+## 메시지 출처 (Source)
+
+AI 응답에 참조한 문서 정보가 `sources` 배열로 함께 반환됩니다.
+
+```json
+// GET /api/v1/sessions/{id}/messages 응답 예시
+{
+  "session_id": "...",
+  "messages": [
+    {
+      "role": "human",
+      "content": "질문 내용",
+      "created_at": "...",
+      "sources": []
+    },
+    {
+      "role": "ai",
+      "content": "AI 응답 내용",
+      "created_at": "...",
+      "sources": [
+        { "name": "doc.pdf", "page": "3" }
+      ]
+    }
+  ]
+}
+```
 
 ## 회원가입 승인 흐름
 
@@ -169,7 +262,7 @@ alembic upgrade head
 | `LLM_SERVER_URL` | `http://localhost:8001` | LLM 서버 주소 |
 | `REQUEST_TIMEOUT` | `60` | 연결 타임아웃 (초, read는 무제한) |
 | `DATABASE_URL` | — | PostgreSQL 연결 문자열 (`postgresql+asyncpg://user:pw@host:5432/db`) |
-| `JWT_SECRET_KEY` | — | JWT 서명 키 |
+| `JWT_SECRET_KEY` | — | JWT 서명 키 (반드시 환경변수로 설정) |
 | `JWT_ALGORITHM` | `HS256` | JWT 알고리즘 |
 | `ACCESS_TOKEN_EXPIRE_MINUTES` | `30` | 액세스 토큰 만료 시간 (분) |
 | `REFRESH_TOKEN_EXPIRE_DAYS` | `7` | 리프레시 토큰 만료 시간 (일) |

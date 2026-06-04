@@ -10,14 +10,22 @@ class ChatRequest(BaseModel):
     question: str
 
 
+class SourceResponse(BaseModel):
+    name: str
+    page: str | None
+
+    model_config = {"from_attributes": True}
+
+
 class MessageResponse(BaseModel):
     role: RoleEnum
     content: str
     created_at: datetime
+    sources: list[SourceResponse] = []
 
     model_config = {"from_attributes": True}
+
 
 class MessageListResponse(BaseModel):
     session_id: uuid.UUID
     messages: list[MessageResponse]
-

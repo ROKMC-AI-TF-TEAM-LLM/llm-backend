@@ -31,3 +31,8 @@ class Message(Base):
     )
 
     session: Mapped["Session"] = relationship(back_populates="messages")
+    sources: Mapped[list["Source"]] = relationship(
+        back_populates="message",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+    )

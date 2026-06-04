@@ -4,12 +4,14 @@ from collections.abc import AsyncGenerator
 from datetime import datetime, timezone
 
 from sqlalchemy import select
+from sqlalchemy.orm import selectinload
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.exceptions import SessionAccessDeniedError, SessionNotFoundError
 from app.core.logger import get_logger
 from app.models.message import Message, RoleEnum
 from app.models.session import Session
+from app.models.source import Source
 from app.services import llm_client
 
 logger = get_logger(__name__)
@@ -44,12 +46,23 @@ async def _save_messages(
     session_id: uuid.UUID,
     question: str,
     answer: str,
+    sources: list[dict],
 ) -> None:
     db.add(Message(session_id=session_id, role=RoleEnum.human, content=question))
-    db.add(Message(session_id=session_id, role=RoleEnum.ai, content=answer))
+    ai_message = Message(session_id=session_id, role=RoleEnum.ai, content=answer)
+    db.add(ai_message)
+    await db.flush()
+
+    for item in sources:
+        db.add(Source(
+            message_id=ai_message.message_id,
+            name=item.get("name", ""),
+            page=item.get("page"),
+        ))
+
     session.updated_at = datetime.now(timezone.utc)
     await db.commit()
-    logger.info("메시지 저장 완료 — human + ai length=%d", len(answer))
+    logger.info("메시지 저장 완료 — human + ai length=%d, sources=%d", len(answer), len(sources))
 
 
 async def get_messages(db: AsyncSession, session_id: uuid.UUID, user_id: uuid.UUID) -> list[Message]:
@@ -58,6 +71,7 @@ async def get_messages(db: AsyncSession, session_id: uuid.UUID, user_id: uuid.UU
         select(Message)
         .where(Message.session_id == session_id)
         .order_by(Message.created_at.asc())
+        .options(selectinload(Message.sources))
     )
     messages = list(result.all())
     logger.info("메시지 이력 조회 session_id=%s count=%d", session_id, len(messages))
@@ -82,13 +96,14 @@ async def chat_stream(
     logger.info("이전 대화 이력 %d건 전송", len(llm_messages))
 
     accumulated: list[str] = []
+    pending_sources: list[dict] = []
 
     async for raw in llm_client.stream_chat(question, llm_messages):
         event = _parse_event(raw)
         event_type = event.get("type") if event else None
 
         if event_type == "done":
-            await _save_messages(db, session, session_id, question, "".join(accumulated))
+            await _save_messages(db, session, session_id, question, "".join(accumulated), pending_sources)
             yield f"data: {raw}\n\n"
             return
 
@@ -98,9 +113,10 @@ async def chat_stream(
             return
 
         if event_type == "sources":
-            logger.debug("출처 이벤트 수신 session_id=%s", session_id)
+            pending_sources = event.get("items", [])
+            logger.debug("출처 이벤트 수신 session_id=%s count=%d", session_id, len(pending_sources))
             yield f"data: {raw}\n\n"
             continue
 
-        accumulated.append(event["content"] if event and event.get("type") == "text" else "")
+        accumulated.append(event["content"] if event and event.get("type") == "text" else raw)
         yield f"data: {raw}\n\n"

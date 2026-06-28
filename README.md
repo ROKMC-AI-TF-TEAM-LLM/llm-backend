@@ -72,6 +72,8 @@ llm-backend/
 | DELETE | `/api/v1/sessions/{id}` | 세션 삭제 (하위 메시지 함께 삭제) | 필요 |
 | GET | `/api/v1/sessions/{id}/messages` | 메시지 이력 조회 (출처 포함) | 필요 |
 | POST | `/api/v1/sessions/{id}/messages/stream` | LLM 스트리밍 채팅 (SSE) | 필요 |
+| DELETE | `/api/v1/sessions/{id}/messages/{msg_id}` | 메시지 삭제 | 필요 |
+| POST | `/api/v1/sessions/{id}/messages/{msg_id}/regenerate` | AI 응답 재생성 (SSE) | 필요 |
 | GET | `/api/v1/documents` | RAG 문서 목록 (offset 기반 무한 스크롤) | 필요 |
 | GET | `/api/v1/admin/users` | 전체 회원 목록 (cursor 기반, 필터/검색) | 관리자 |
 | GET | `/api/v1/admin/users/{id}` | 회원 상세 조회 | 관리자 |
@@ -118,6 +120,8 @@ llm-backend/
 | `SESSION_ACCESS_DENIED` | 403 | 세션 접근 권한 없음 |
 | `USER_NOT_FOUND` | 404 | 사용자 없음 |
 | `SESSION_NOT_FOUND` | 404 | 세션 없음 |
+| `MESSAGE_NOT_FOUND` | 404 | 메시지 없음 |
+| `INVALID_MESSAGE_ROLE` | 400 | AI 메시지가 아닌 메시지로 재생성 요청 |
 | `EMAIL_ALREADY_EXISTS` | 409 | 이메일 중복 |
 | `VALIDATION_ERROR` | 422 | 요청 파라미터 유효성 오류 |
 | `LLM_SERVER_ERROR` | 502 | LLM 서버 연결 오류 |
@@ -160,7 +164,7 @@ GET /api/v1/admin/users?role=user&status=pending&search=홍길동&size=20
 
 ## LLM 스트리밍 응답 형식
 
-`POST /api/v1/sessions/{id}/messages/stream`은 `text/event-stream` (SSE) 형식으로 응답합니다.
+`POST /api/v1/sessions/{id}/messages/stream` 및 `POST /api/v1/sessions/{id}/messages/{msg_id}/regenerate` 는 `text/event-stream` (SSE) 형식으로 응답합니다.
 
 ```
 // 텍스트 토큰 (토큰 단위 스트리밍)
@@ -174,13 +178,15 @@ data: {"type": "sources", "items": [{"name": "doc.pdf", "page": "3"}]}
 // 응답 완료
 data: {"type": "done"}
 
-// 오류 발생
+// 오류 발생 (LLM 오류, 빈 응답, 메시지 없음, role 오류 포함)
 data: {"type": "error", "message": "오류 내용"}
 ```
 
-## 메시지 출처 (Source)
+> **재생성 흐름:** `regenerate` 엔드포인트는 기존 AI 메시지를 삭제하고 동일한 질문으로 LLM에 재요청합니다. `message_id`는 반드시 `role: "ai"`인 메시지여야 합니다.
 
-AI 응답에 참조한 문서 정보가 `sources` 배열로 함께 반환됩니다.
+## 메시지 이력 응답
+
+AI 응답에 참조한 문서 정보가 `sources` 배열로 함께 반환됩니다. 각 메시지에 `message_id`가 포함됩니다.
 
 ```json
 // GET /api/v1/sessions/{id}/messages 응답 예시
@@ -188,20 +194,53 @@ AI 응답에 참조한 문서 정보가 `sources` 배열로 함께 반환됩니�
   "session_id": "...",
   "messages": [
     {
+      "message_id": "765ada85-6b49-4705-8eb1-6c4e5c13de5c",
       "role": "human",
       "content": "질문 내용",
-      "created_at": "...",
+      "created_at": "2026-06-28T23:34:52Z",
       "sources": []
     },
     {
+      "message_id": "2b771768-c406-4540-9b36-1a77c5dbeb13",
       "role": "ai",
       "content": "AI 응답 내용",
-      "created_at": "...",
+      "created_at": "2026-06-28T23:34:53Z",
       "sources": [
         { "name": "doc.pdf", "page": "3" }
       ]
     }
   ]
+}
+```
+
+## 내 정보 응답
+
+```json
+// GET /api/v1/users/me 응답 예시
+{
+  "name": "홍길동",
+  "email": "user@example.com",
+  "role": "user",
+  "created_at": "2026-06-28T12:00:00Z"
+}
+```
+
+## 문서 목록 응답
+
+```json
+// GET /api/v1/documents?offset=0&limit=20 응답 예시
+{
+  "items": [
+    {
+      "name": "산업 디지털 전환법(20260701).pdf",
+      "type": "PDF",
+      "applied_at": "2026-05-26T19:00:52Z"
+    }
+  ],
+  "total": 42,
+  "offset": 0,
+  "limit": 20,
+  "has_more": true
 }
 ```
 
@@ -267,3 +306,4 @@ alembic upgrade head
 | `ACCESS_TOKEN_EXPIRE_MINUTES` | `30` | 액세스 토큰 만료 시간 (분) |
 | `REFRESH_TOKEN_EXPIRE_DAYS` | `7` | 리프레시 토큰 만료 시간 (일) |
 | `LOG_LEVEL` | `INFO` | 로그 레벨 (`DEBUG`, `INFO`, `WARNING`) |
+| `DB_DISABLE_SSL` | `false` | DB SSL 비활성화 여부 (로컬 개발 환경에서 `true` 설정) |

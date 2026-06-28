@@ -78,6 +78,20 @@ R_404_SESSION = {
     )
 }
 
+R_404_MESSAGE = {
+    404: _resp(
+        "메시지 없음",
+        message_not_found=_ex(404, "MESSAGE_NOT_FOUND", "메시지를 찾을 수 없습니다."),
+    )
+}
+
+R_400_MESSAGE_ROLE = {
+    400: _resp(
+        "잘못된 메시지 역할",
+        invalid_role=_ex(400, "INVALID_MESSAGE_ROLE", "AI 메시지만 재생성할 수 있습니다."),
+    )
+}
+
 # 409
 R_409_EMAIL = {
     409: _resp(

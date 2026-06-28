@@ -85,6 +85,18 @@ class SessionNotFoundError(AppHTTPException):
     detail = "세션을 찾을 수 없습니다."
 
 
+class MessageNotFoundError(AppHTTPException):
+    status_code = 404
+    error_code = "MESSAGE_NOT_FOUND"
+    detail = "메시지를 찾을 수 없습니다."
+
+
+class InvalidMessageRoleError(AppHTTPException):
+    status_code = 400
+    error_code = "INVALID_MESSAGE_ROLE"
+    detail = "AI 메시지만 재생성할 수 있습니다."
+
+
 # 409
 class ConflictError(AppHTTPException):
     status_code = 409

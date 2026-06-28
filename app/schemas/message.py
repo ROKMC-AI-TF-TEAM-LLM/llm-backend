@@ -18,6 +18,7 @@ class SourceResponse(BaseModel):
 
 
 class MessageResponse(BaseModel):
+    message_id: uuid.UUID
     role: RoleEnum
     content: str
     created_at: datetime

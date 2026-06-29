@@ -3,31 +3,6 @@
 아래 내용을 바탕으로 이 프론트엔드 코드베이스에서 백엔드 API 변경사항을 반영해줘.
 각 항목별로 관련 파일을 찾아서 수정하고, 없는 기능은 새로 구현해줘.
 
----
-
-## 1. `GET /api/v1/users/me` — 응답 필드 추가
-
-**변경 전:**
-```json
-{ "name": "홍길동", "email": "user@example.com" }
-```
-
-**변경 후:**
-```json
-{
-  "name": "홍길동",
-  "email": "user@example.com",
-  "role": "user",
-  "created_at": "2026-06-28T12:00:00Z"
-}
-```
-
-**할 일:**
-- 사용자 타입/인터페이스에 `role: "user" | "admin"`, `created_at: string` 필드 추가
-- `role`이 `"admin"`일 경우 관리자 메뉴/기능 진입을 허용하는 분기가 있다면 이 필드를 활용하도록 수정
-
----
-
 ## 2. `GET /api/v1/sessions/{id}/messages` — 각 메시지에 `message_id` 추가
 
 **변경 전:**
@@ -123,53 +98,6 @@ data: {"type": "error", "message": "AI 메시지만 재생성할 수 있습니�
 - 스트리밍 수신 중: 새 텍스트로 점진적 교체
 - `done` 이벤트: 완료 처리
 - `error` 이벤트: 에러 메시지 표시 및 이전 메시지 복원 또는 빈 상태 처리
-
----
-
-## 5. `GET /api/v1/documents` — 응답 스키마 변경
-
-**변경 전 (타입 미정의 `dict`):**
-```json
-{ ... }
-```
-
-**변경 후:**
-```json
-{
-  "items": [
-    {
-      "name": "산업 디지털 전환법(20260701).pdf",
-      "type": "PDF",
-      "applied_at": "2026-05-26T19:00:52Z"
-    }
-  ],
-  "total": 42,
-  "offset": 0,
-  "limit": 20,
-  "has_more": true
-}
-```
-
-**할 일:**
-- 문서 목록 타입/인터페이스 정의 또는 수정
-  ```ts
-  interface DocumentItem {
-    name: string;
-    type: string | null;
-    applied_at: string | null;
-  }
-  interface DocumentListResponse {
-    items: DocumentItem[];
-    total: number;
-    offset: number;
-    limit: number;
-    has_more: boolean;
-  }
-  ```
-- 문서 목록 렌더링 컴포넌트에서 `type`, `applied_at` 필드 노출 여부 결정 후 적용
-- 페이지네이션: `has_more`가 `false`이면 더 이상 로드하지 않음
-
----
 
 ## 공통 사항
 

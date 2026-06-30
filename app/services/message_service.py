@@ -136,50 +136,41 @@ async def regenerate_stream(
 ) -> AsyncGenerator[str, None]:
     try:
         session = await _verify_session(db, session_id, user_id)
+
+        result = await db.scalars(
+            select(Message)
+            .where(Message.session_id == session_id)
+            .order_by(Message.created_at.asc())
+        )
+        all_msgs = list(result.all())
+
+        ai_idx = next((i for i, m in enumerate(all_msgs) if m.message_id == message_id), None)
+        if ai_idx is None:
+            yield f"data: {json.dumps({'type': 'error', 'message': '메시지를 찾을 수 없습니다.'})}\n\n"
+            return
+
+        ai_message = all_msgs[ai_idx]
+        if ai_message.role != RoleEnum.ai:
+            yield f"data: {json.dumps({'type': 'error', 'message': 'AI 메시지만 재생성할 수 있습니다.'})}\n\n"
+            return
+
+        human_idx = next(
+            (i for i in range(ai_idx - 1, -1, -1) if all_msgs[i].role == RoleEnum.human),
+            None,
+        )
+        if human_idx is None:
+            yield f"data: {json.dumps({'type': 'error', 'message': '원본 질문 메시지를 찾을 수 없습니다.'})}\n\n"
+            return
+
+        question = all_msgs[human_idx].content
+        llm_messages = _to_llm_messages(all_msgs[:human_idx])
+
     except Exception as e:
         from app.core.exceptions import AppHTTPException
-        detail = e.detail if isinstance(e, AppHTTPException) else "인증 오류가 발생했습니다."
+        detail = e.detail if isinstance(e, AppHTTPException) else "서버 오류가 발생했습니다."
+        logger.exception("재생성 전처리 오류 session_id=%s message_id=%s", session_id, message_id)
         yield f"data: {json.dumps({'type': 'error', 'message': detail})}\n\n"
         return
-
-    ai_message = await db.scalar(
-        select(Message).where(
-            Message.message_id == message_id,
-            Message.session_id == session_id,
-        )
-    )
-    if not ai_message:
-        yield f"data: {json.dumps({'type': 'error', 'message': '메시지를 찾을 수 없습니다.'})}\n\n"
-        return
-    if ai_message.role != RoleEnum.ai:
-        yield f"data: {json.dumps({'type': 'error', 'message': 'AI 메시지만 재생성할 수 있습니다.'})}\n\n"
-        return
-
-    human_message = await db.scalar(
-        select(Message)
-        .where(
-            Message.session_id == session_id,
-            Message.role == RoleEnum.human,
-            Message.created_at < ai_message.created_at,
-        )
-        .order_by(Message.created_at.desc())
-        .limit(1)
-    )
-    if not human_message:
-        yield f"data: {json.dumps({'type': 'error', 'message': '원본 질문 메시지를 찾을 수 없습니다.'})}\n\n"
-        return
-
-    question = human_message.content
-
-    history_result = await db.scalars(
-        select(Message)
-        .where(
-            Message.session_id == session_id,
-            Message.created_at < human_message.created_at,
-        )
-        .order_by(Message.created_at.asc())
-    )
-    llm_messages = _to_llm_messages(list(history_result.all()))
 
     await db.delete(ai_message)
     await db.commit()

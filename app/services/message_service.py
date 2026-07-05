@@ -204,6 +204,10 @@ async def regenerate_stream(
             yield f"data: {raw}\n\n"
             continue
 
+        if event_type == "status":
+            yield f"data: {raw}\n\n"
+            continue
+
         accumulated.append(event["content"] if event and event.get("type") == "text" else raw)
         yield f"data: {raw}\n\n"
 
@@ -250,6 +254,10 @@ async def chat_stream(
         if event_type == "sources":
             pending_sources = event.get("items", [])
             logger.debug("출처 이벤트 수신 session_id=%s count=%d", session_id, len(pending_sources))
+            yield f"data: {raw}\n\n"
+            continue
+
+        if event_type == "status":
             yield f"data: {raw}\n\n"
             continue
 

@@ -1,3 +1,4 @@
+import asyncio
 import json
 import uuid
 from collections.abc import AsyncGenerator
@@ -179,37 +180,44 @@ async def regenerate_stream(
     accumulated: list[str] = []
     pending_sources: list[dict] = []
 
-    async for raw in llm_client.stream_chat(question, llm_messages):
-        event = _parse_event(raw)
-        event_type = event.get("type") if event else None
+    try:
+        async for raw in llm_client.stream_chat(question, llm_messages):
+            event = _parse_event(raw)
+            event_type = event.get("type") if event else None
 
-        if event_type == "done":
-            answer = "".join(accumulated)
-            if not answer:
-                logger.warning("LLM 빈 응답 수신 session_id=%s", session_id)
-                yield f"data: {json.dumps({'type': 'error', 'message': 'LLM이 빈 응답을 반환했습니다.'})}\n\n"
+            if event_type == "done":
+                answer = "".join(accumulated)
+                if not answer:
+                    logger.warning("LLM 빈 응답 수신 session_id=%s", session_id)
+                    yield f"data: {json.dumps({'type': 'error', 'message': 'LLM이 빈 응답을 반환했습니다.'})}\n\n"
+                    return
+                await _save_ai_message(db, session, session_id, answer, pending_sources)
+                yield f"data: {raw}\n\n"
                 return
-            await _save_ai_message(db, session, session_id, answer, pending_sources)
-            yield f"data: {raw}\n\n"
-            return
 
-        if event_type == "error":
-            logger.error("LLM 오류 응답 session_id=%s error=%s", session_id, event.get("message"))
-            yield f"data: {raw}\n\n"
-            return
+            if event_type == "error":
+                logger.error("LLM 오류 응답 session_id=%s error=%s", session_id, event.get("message"))
+                yield f"data: {raw}\n\n"
+                return
 
-        if event_type == "sources":
-            pending_sources = event.get("items", [])
-            logger.debug("출처 이벤트 수신 session_id=%s count=%d", session_id, len(pending_sources))
-            yield f"data: {raw}\n\n"
-            continue
+            if event_type == "sources":
+                pending_sources = event.get("items", [])
+                logger.debug("출처 이벤트 수신 session_id=%s count=%d", session_id, len(pending_sources))
+                yield f"data: {raw}\n\n"
+                continue
 
-        if event_type == "status":
-            yield f"data: {raw}\n\n"
-            continue
+            if event_type == "status":
+                yield f"data: {raw}\n\n"
+                continue
 
-        accumulated.append(event["content"] if event and event.get("type") == "text" else raw)
-        yield f"data: {raw}\n\n"
+            accumulated.append(event["content"] if event and event.get("type") == "text" else raw)
+            yield f"data: {raw}\n\n"
+    except (asyncio.CancelledError, GeneratorExit):
+        logger.info(
+            "클라이언트 연결 중단 — 재생성 스트림 종료 session_id=%s message_id=%s received_chars=%d",
+            session_id, message_id, sum(len(s) for s in accumulated),
+        )
+        raise
 
 
 async def chat_stream(
@@ -232,34 +240,41 @@ async def chat_stream(
     accumulated: list[str] = []
     pending_sources: list[dict] = []
 
-    async for raw in llm_client.stream_chat(question, llm_messages):
-        event = _parse_event(raw)
-        event_type = event.get("type") if event else None
+    try:
+        async for raw in llm_client.stream_chat(question, llm_messages):
+            event = _parse_event(raw)
+            event_type = event.get("type") if event else None
 
-        if event_type == "done":
-            answer = "".join(accumulated)
-            if not answer:
-                logger.warning("LLM 빈 응답 수신 session_id=%s", session_id)
-                yield f"data: {json.dumps({'type': 'error', 'message': 'LLM이 빈 응답을 반환했습니다.'})}\n\n"
+            if event_type == "done":
+                answer = "".join(accumulated)
+                if not answer:
+                    logger.warning("LLM 빈 응답 수신 session_id=%s", session_id)
+                    yield f"data: {json.dumps({'type': 'error', 'message': 'LLM이 빈 응답을 반환했습니다.'})}\n\n"
+                    return
+                await _save_messages(db, session, session_id, question, answer, pending_sources)
+                yield f"data: {raw}\n\n"
                 return
-            await _save_messages(db, session, session_id, question, answer, pending_sources)
-            yield f"data: {raw}\n\n"
-            return
 
-        if event_type == "error":
-            logger.error("LLM 오류 응답 session_id=%s error=%s", session_id, event.get("message"))
-            yield f"data: {raw}\n\n"
-            return
+            if event_type == "error":
+                logger.error("LLM 오류 응답 session_id=%s error=%s", session_id, event.get("message"))
+                yield f"data: {raw}\n\n"
+                return
 
-        if event_type == "sources":
-            pending_sources = event.get("items", [])
-            logger.debug("출처 이벤트 수신 session_id=%s count=%d", session_id, len(pending_sources))
-            yield f"data: {raw}\n\n"
-            continue
+            if event_type == "sources":
+                pending_sources = event.get("items", [])
+                logger.debug("출처 이벤트 수신 session_id=%s count=%d", session_id, len(pending_sources))
+                yield f"data: {raw}\n\n"
+                continue
 
-        if event_type == "status":
-            yield f"data: {raw}\n\n"
-            continue
+            if event_type == "status":
+                yield f"data: {raw}\n\n"
+                continue
 
-        accumulated.append(event["content"] if event and event.get("type") == "text" else raw)
-        yield f"data: {raw}\n\n"
+            accumulated.append(event["content"] if event and event.get("type") == "text" else raw)
+            yield f"data: {raw}\n\n"
+    except (asyncio.CancelledError, GeneratorExit):
+        logger.info(
+            "클라이언트 연결 중단 — LLM 스트림 종료 session_id=%s received_chars=%d",
+            session_id, sum(len(s) for s in accumulated),
+        )
+        raise

@@ -7,6 +7,9 @@ class DocumentItem(BaseModel):
     name: str
     type: str | None = None
     applied_at: datetime | None = None
+    domain: str | None = None
+    visibility: str | None = None
+    owning_department: str | None = None
 
 
 class DocumentListResponse(BaseModel):

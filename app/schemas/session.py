@@ -12,9 +12,14 @@ class SessionUpdate(BaseModel):
     title: str
 
 
+class SessionFavoriteUpdate(BaseModel):
+    is_favorite: bool
+
+
 class SessionResponse(BaseModel):
     session_id: uuid.UUID
     title: str
+    is_favorite: bool
     updated_at: datetime
 
     model_config = {"from_attributes": True}

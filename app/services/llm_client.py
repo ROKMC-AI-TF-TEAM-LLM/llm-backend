@@ -13,7 +13,7 @@ async def stream_chat(question: str, messages: list[dict]) -> AsyncGenerator[str
     async with httpx.AsyncClient(timeout=timeout) as client:
         async with client.stream(
             "POST",
-            f"{settings.llm_server_url}/api/rag/agent/stream",
+            f"{settings.llm_server_url}/query",
             json={"question": question, "messages": messages},
         ) as response:
             buffer = ""

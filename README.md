@@ -69,6 +69,7 @@ llm-backend/
 | GET | `/api/v1/sessions` | 세션 목록 (cursor 기반 무한 스크롤) | 필요 |
 | GET | `/api/v1/sessions/search` | 세션 검색 | 필요 |
 | PATCH | `/api/v1/sessions/{id}` | 세션 제목 수정 | 필요 |
+| PATCH | `/api/v1/sessions/{id}/favorite` | 세션 즐겨찾기 등록/해제 | 필요 |
 | DELETE | `/api/v1/sessions/{id}` | 세션 삭제 (하위 메시지 함께 삭제) | 필요 |
 | GET | `/api/v1/sessions/{id}/messages` | 메시지 이력 조회 (출처 포함) | 필요 |
 | POST | `/api/v1/sessions/{id}/messages/stream` | LLM 스트리밍 채팅 (SSE) | 필요 |
@@ -131,16 +132,18 @@ llm-backend/
 ### 세션 목록 — cursor 기반
 
 `updated_at` 기준으로 최신순 정렬. 세션 업데이트 시 순서가 바뀌어도 중복/누락 없음.
+`is_favorite=true` 쿼리 파라미터로 즐겨찾기한 세션만 필터링할 수 있음 (생략 시 전체).
 
 ```
 첫 요청:  GET /api/v1/sessions?size=20
 다음 요청: GET /api/v1/sessions?cursor={next_cursor}&size=20
+즐겨찾기만: GET /api/v1/sessions?is_favorite=true&size=20
 종료 조건: has_next == false
 ```
 
 ```json
 {
-  "items": [ { "session_id": "...", "title": "...", "updated_at": "..." } ],
+  "items": [ { "session_id": "...", "title": "...", "is_favorite": false, "updated_at": "..." } ],
   "next_cursor": "2025-05-10T12:34:56.789Z",
   "has_next": true
 }
@@ -161,6 +164,25 @@ llm-backend/
 ```
 GET /api/v1/admin/users?role=user&status=pending&search=홍길동&size=20
 ```
+
+## 세션 즐겨찾기
+
+`PATCH /api/v1/sessions/{id}/favorite` 로 즐겨찾기를 등록/해제합니다. 본인의 세션만 설정 가능합니다.
+
+```json
+// 요청
+{ "is_favorite": true }
+
+// 응답 (data)
+{
+  "session_id": "...",
+  "title": "새 대화",
+  "is_favorite": true,
+  "updated_at": "2026-07-13T12:00:00Z"
+}
+```
+
+> 즐겨찾기 변경은 `updated_at`을 갱신하지 않으므로 세션 목록(최근 수정순)의 순서에 영향을 주지 않습니다.
 
 ## LLM 스트리밍 응답 형식
 

@@ -8,7 +8,7 @@ logger = get_logger(__name__)
 
 
 async def get_documents(offset: int, limit: int) -> dict:
-    url = f"{settings.llm_server_url}/api/documents"
+    url = f"{settings.llm_server_url}/documents"
     try:
         async with httpx.AsyncClient(timeout=settings.request_timeout) as client:
             response = await client.get(url, params={"offset": offset, "limit": limit})

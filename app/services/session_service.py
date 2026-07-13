@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime
 
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.exceptions import SessionAccessDeniedError, SessionNotFoundError
@@ -22,6 +22,7 @@ async def get_sessions(
     user_id: uuid.UUID,
     cursor: datetime | None = None,
     size: int = 20,
+    is_favorite: bool | None = None,
 ) -> tuple[list[Session], bool]:
     query = (
         select(Session)
@@ -31,6 +32,8 @@ async def get_sessions(
     )
     if cursor:
         query = query.where(Session.updated_at < cursor)
+    if is_favorite is not None:
+        query = query.where(Session.is_favorite == is_favorite)
 
     result = await db.scalars(query)
     sessions = list(result.all())
@@ -59,6 +62,22 @@ async def _get_session_owned(db: AsyncSession, session_id: uuid.UUID, user_id: u
 async def update_session(db: AsyncSession, session_id: uuid.UUID, user_id: uuid.UUID, data: SessionUpdate) -> Session:
     session = await _get_session_owned(db, session_id, user_id)
     session.title = data.title
+    await db.commit()
+    await db.refresh(session)
+    return session
+
+
+async def set_favorite(
+    db: AsyncSession, session_id: uuid.UUID, user_id: uuid.UUID, is_favorite: bool
+) -> Session:
+    session = await _get_session_owned(db, session_id, user_id)
+    # updated_at을 SET에 그대로 명시해 onupdate 갱신을 막는다
+    # (즐겨찾기 변경이 최근 수정순 목록의 순서를 바꾸지 않도록)
+    await db.execute(
+        update(Session)
+        .where(Session.session_id == session_id)
+        .values(is_favorite=is_favorite, updated_at=Session.updated_at)
+    )
     await db.commit()
     await db.refresh(session)
     return session

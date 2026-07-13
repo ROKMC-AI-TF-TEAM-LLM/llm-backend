@@ -18,7 +18,7 @@ async def check_db(db: AsyncSession) -> bool:
 
 
 async def check_llm_server() -> bool:
-    url = f"{settings.llm_server_url}/api/health"
+    url = f"{settings.llm_server_url}/health"
     try:
         async with httpx.AsyncClient(timeout=5) as client:
             res = await client.get(url)

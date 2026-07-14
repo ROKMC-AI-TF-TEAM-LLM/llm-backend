@@ -5,7 +5,7 @@ FastAPI 기반 LLM 미들웨어 서버입니다. 사용자의 요청을 받아 L
 ## 아키텍처
 
 ```
-사용자 → FastAPI Backend (이 서버) → LLM Server (/api/rag/agent/stream)
+사용자 → FastAPI Backend (이 서버) → LLM Server (/query, /documents, /capabilities, /health)
 ```
 
 ## 디렉토리 구조
@@ -31,14 +31,16 @@ llm-backend/
 │   │   ├── user.py                    # UserCreate, UserUpdate, UserResponse 등
 │   │   ├── auth.py                    # LoginRequest, TokenResponse 등
 │   │   ├── session.py                 # SessionCreate, SessionResponse, SessionPageResponse
-│   │   ├── message.py                 # ChatRequest, MessageResponse, MessageListResponse
-│   │   └── document.py                # DocumentListResponse
+│   │   ├── message.py                 # ChatRequest, RegenerateRequest, MessageResponse 등
+│   │   ├── document.py                # DocumentListResponse
+│   │   └── capability.py              # CapabilityResponse (domain·tool 목록)
 │   ├── services/
 │   │   ├── auth_service.py            # JWT 발급/검증, 로그인
 │   │   ├── user_service.py            # 유저 CRUD, 승인/거절
 │   │   ├── session_service.py         # 세션 CRUD, cursor 기반 페이지네이션
 │   │   ├── message_service.py         # 메시지 저장, LLM 스트리밍, 출처 저장
 │   │   ├── document_service.py        # LLM 서버 문서 목록 프록시
+│   │   ├── capability_service.py      # LLM 서버 domain·tool 목록 프록시
 │   │   ├── health_service.py          # DB / LLM 서버 헬스체크
 │   │   └── llm_client.py              # LLM 서버 HTTP 스트리밍 클라이언트
 │   └── api/v1/routes/
@@ -48,7 +50,8 @@ llm-backend/
 │       ├── session.py                 # CRUD /sessions
 │       ├── message.py                 # GET|POST /sessions/{id}/messages
 │       ├── admin.py                   # GET|PATCH|DELETE /admin/users
-│       └── document.py                # GET /documents
+│       ├── document.py                # GET /documents
+│       └── capability.py              # GET /capabilities
 ├── alembic/                           # DB 마이그레이션
 ├── main.py                            # 서버 실행 진입점
 ├── .env                               # 환경변수 (git 제외)
@@ -75,7 +78,8 @@ llm-backend/
 | POST | `/api/v1/sessions/{id}/messages/stream` | LLM 스트리밍 채팅 (SSE) | 필요 |
 | DELETE | `/api/v1/sessions/{id}/messages/{msg_id}` | 메시지 삭제 | 필요 |
 | POST | `/api/v1/sessions/{id}/messages/{msg_id}/regenerate` | AI 응답 재생성 (SSE) | 필요 |
-| GET | `/api/v1/documents` | RAG 문서 목록 (offset 기반 무한 스크롤) | 필요 |
+| GET | `/api/v1/documents` | RAG 문서 목록 (offset 기반, `domain` 필터) | 필요 |
+| GET | `/api/v1/capabilities` | 채팅에 사용 가능한 domain·tool 목록 | 필요 |
 | GET | `/api/v1/admin/users` | 전체 회원 목록 (cursor 기반, 필터/검색) | 관리자 |
 | GET | `/api/v1/admin/users/{id}` | 회원 상세 조회 | 관리자 |
 | PATCH | `/api/v1/admin/users/{id}/approve` | 회원 가입 승인 | 관리자 |
@@ -184,15 +188,38 @@ GET /api/v1/admin/users?role=user&status=pending&search=홍길동&size=20
 
 > 즐겨찾기 변경은 `updated_at`을 갱신하지 않으므로 세션 목록(최근 수정순)의 순서에 영향을 주지 않습니다.
 
-## LLM 스트리밍 응답 형식
+## LLM 스트리밍 요청/응답 형식
 
 `POST /api/v1/sessions/{id}/messages/stream` 및 `POST /api/v1/sessions/{id}/messages/{msg_id}/regenerate` 는 `text/event-stream` (SSE) 형식으로 응답합니다.
 
-```
-// 텍스트 토큰 (토큰 단위 스트리밍)
-data: 안녕
+**요청 body** — `domain`·`tool`은 선택이며, 둘 다 생략하면 기존과 동일하게 자동 분류로 동작합니다.
 
-data: 하세요
+```json
+// POST /sessions/{id}/messages/stream
+{
+  "question": "훈령에서 휴가 규정 알려줘",
+  "domain": "DIRECTIVE",   // 선택: 검색 범위 한정
+  "tool": "DOC_SEARCH"     // 선택: 처리 경로 강제
+}
+
+// POST /sessions/{id}/messages/{msg_id}/regenerate — body 자체가 선택
+{ "domain": "MANUAL", "tool": "DOC_SEARCH" }
+```
+
+- `domain` — 검색 범위 한정: `HR | TECH | FINANCE_LEGAL | MANUAL(교범) | DIRECTIVE(훈령)`. 빈 값/`ALL` = 전체. 미지 값은 무시(전체). "교범에서만 검색" 모드는 이 필드로 구현
+- `tool` — 처리 경로 강제: `DOC_SEARCH | DISCHARGE_DAYS`. 지정 시 자동 분류를 건너뛰고 무조건 해당 경로 (잡담 예외 없음). `SMALLTALK`은 강제 불가(무시됨)
+- 조합: `tool=DOC_SEARCH` + `domain=DIRECTIVE` → 훈령 전용 검색 탭 UI
+- 사용 가능한 값 목록은 `GET /api/v1/capabilities`로 조회 (하드코딩 대신 이 API를 데이터 소스로 권장)
+- 재생성 시 원래 질문의 `domain`·`tool`은 저장되지 않으므로, 같은 모드로 재생성하려면 body에 다시 지정해야 함
+
+```
+// 진행 상태 (라우팅/검색/생성 단계 표시용)
+data: {"type": "status", "stage": "route", "message": "질문을 분석하는 중..."}
+
+// 답변 텍스트 (토큰 단위 스트리밍)
+data: {"type": "text", "content": "안녕"}
+
+data: {"type": "text", "content": "하세요"}
 
 // 참조 문서 출처
 data: {"type": "sources", "items": [{"name": "doc.pdf", "page": "3"}]}
@@ -249,20 +276,48 @@ AI 응답에 참조한 문서 정보가 `sources` 배열로 함께 반환됩니�
 
 ## 문서 목록 응답
 
+`domain` 쿼리 파라미터로 도메인별 필터링이 가능합니다 (예: `?domain=MANUAL`).
+
 ```json
 // GET /api/v1/documents?offset=0&limit=20 응답 예시
 {
-  "items": [
+  "documents": [
     {
-      "name": "산업 디지털 전환법(20260701).pdf",
+      "name": "휴가규정.pdf",
       "type": "PDF",
-      "applied_at": "2026-05-26T19:00:52Z"
+      "domain": "HR",
+      "visibility": "ALL",
+      "owning_department": "HR_TEAM",
+      "applied_at": "2026-07-05T19:09:47"
     }
   ],
   "total": 42,
   "offset": 0,
   "limit": 20,
   "has_more": true
+}
+```
+
+## 사용 가능한 domain·tool 목록
+
+프론트엔드 도메인 탭/검색 모드 UI의 데이터 소스입니다. `tools` 중 `forcible: true`인 항목만 `tool` 필드로 강제 지정할 수 있습니다.
+
+```json
+// GET /api/v1/capabilities 응답 예시 (data)
+{
+  "domains": [
+    { "code": "HR", "label": "인사·복지" },
+    { "code": "TECH", "label": "정보화·보안" },
+    { "code": "FINANCE_LEGAL", "label": "재무·법무" },
+    { "code": "GENERAL", "label": "일반" },
+    { "code": "MANUAL", "label": "교범" },
+    { "code": "DIRECTIVE", "label": "훈령" }
+  ],
+  "tools": [
+    { "code": "DOC_SEARCH", "description": "군 내부 문서 검색이 필요한 업무·규정·행정 질문", "forcible": true },
+    { "code": "SMALLTALK", "description": "인사, 자기소개, 감사, 잡담", "forcible": false },
+    { "code": "DISCHARGE_DAYS", "description": "전역일이나 전역까지 남은 날짜를 묻는 질문", "forcible": true }
+  ]
 }
 ```
 

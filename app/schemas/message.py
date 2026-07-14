@@ -8,6 +8,13 @@ from app.models.message import RoleEnum
 
 class ChatRequest(BaseModel):
     question: str
+    domain: str | None = None
+    tool: str | None = None
+
+
+class RegenerateRequest(BaseModel):
+    domain: str | None = None
+    tool: str | None = None
 
 
 class SourceResponse(BaseModel):

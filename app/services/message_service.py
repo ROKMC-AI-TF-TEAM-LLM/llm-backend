@@ -133,6 +133,8 @@ async def regenerate_stream(
     session_id: uuid.UUID,
     message_id: uuid.UUID,
     user_id: uuid.UUID,
+    domain: str | None = None,
+    tool: str | None = None,
 ) -> AsyncGenerator[str, None]:
     try:
         session = await _verify_session(db, session_id, user_id)
@@ -179,7 +181,7 @@ async def regenerate_stream(
     accumulated: list[str] = []
     pending_sources: list[dict] = []
 
-    async for raw in llm_client.stream_chat(question, llm_messages):
+    async for raw in llm_client.stream_chat(question, llm_messages, domain=domain, tool=tool):
         event = _parse_event(raw)
         event_type = event.get("type") if event else None
 
@@ -217,6 +219,8 @@ async def chat_stream(
     session_id: uuid.UUID,
     user_id: uuid.UUID,
     question: str,
+    domain: str | None = None,
+    tool: str | None = None,
 ) -> AsyncGenerator[str, None]:
     session = await _verify_session(db, session_id, user_id)
     logger.info("스트리밍 시작 session_id=%s", session_id)
@@ -232,7 +236,7 @@ async def chat_stream(
     accumulated: list[str] = []
     pending_sources: list[dict] = []
 
-    async for raw in llm_client.stream_chat(question, llm_messages):
+    async for raw in llm_client.stream_chat(question, llm_messages, domain=domain, tool=tool):
         event = _parse_event(raw)
         event_type = event.get("type") if event else None
 

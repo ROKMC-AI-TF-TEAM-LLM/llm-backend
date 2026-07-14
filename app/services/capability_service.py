@@ -7,18 +7,15 @@ from app.core.logger import get_logger
 logger = get_logger(__name__)
 
 
-async def get_documents(offset: int, limit: int, domain: str | None = None) -> dict:
-    url = f"{settings.llm_server_url}/documents"
-    params: dict = {"offset": offset, "limit": limit}
-    if domain:
-        params["domain"] = domain
+async def get_capabilities() -> dict:
+    url = f"{settings.llm_server_url}/capabilities"
     try:
         async with httpx.AsyncClient(timeout=settings.request_timeout) as client:
-            response = await client.get(url, params=params)
+            response = await client.get(url)
             response.raise_for_status()
             return response.json()
     except httpx.HTTPStatusError as e:
-        logger.error("문서 목록 조회 실패 status=%d url=%s", e.response.status_code, url)
+        logger.error("capabilities 조회 실패 status=%d url=%s", e.response.status_code, url)
         raise LLMServerError(detail=f"LLM 서버 오류: HTTP {e.response.status_code}")
     except Exception:
         logger.error("LLM 서버 연결 오류 url=%s", url)

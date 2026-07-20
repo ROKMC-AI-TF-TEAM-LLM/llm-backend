@@ -36,3 +36,8 @@ class Message(Base):
         cascade="all, delete-orphan",
         passive_deletes=True,
     )
+    attachments: Mapped[list["Attachment"]] = relationship(
+        back_populates="message",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+    )

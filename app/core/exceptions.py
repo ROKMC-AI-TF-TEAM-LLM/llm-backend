@@ -91,6 +91,12 @@ class MessageNotFoundError(AppHTTPException):
     detail = "메시지를 찾을 수 없습니다."
 
 
+class AttachmentNotFoundError(AppHTTPException):
+    status_code = 404
+    error_code = "FILE_NOT_FOUND"
+    detail = "파일을 찾을 수 없습니다."
+
+
 class InvalidMessageRoleError(AppHTTPException):
     status_code = 400
     error_code = "INVALID_MESSAGE_ROLE"

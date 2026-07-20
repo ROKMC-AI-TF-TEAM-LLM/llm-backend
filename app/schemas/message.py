@@ -24,12 +24,21 @@ class SourceResponse(BaseModel):
     model_config = {"from_attributes": True}
 
 
+class AttachmentResponse(BaseModel):
+    attachment_id: uuid.UUID
+    name: str
+    size: int
+
+    model_config = {"from_attributes": True}
+
+
 class MessageResponse(BaseModel):
     message_id: uuid.UUID
     role: RoleEnum
     content: str
     created_at: datetime
     sources: list[SourceResponse] = []
+    attachments: list[AttachmentResponse] = []
 
     model_config = {"from_attributes": True}
 

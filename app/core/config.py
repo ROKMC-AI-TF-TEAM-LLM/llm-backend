@@ -4,6 +4,7 @@ from pydantic_settings import BaseSettings
 class Settings(BaseSettings):
     llm_server_url: str = "http://localhost:8001"
     request_timeout: int = 60
+    max_attachment_size_mb: int = 20
     log_level: str = "INFO"
 
     database_url: str = "postgresql+asyncpg://user:password@localhost:5432/llm_db"

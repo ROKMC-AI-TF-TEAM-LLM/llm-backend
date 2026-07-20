@@ -1,12 +1,15 @@
 import json
+import re
 import uuid
 from collections.abc import AsyncGenerator
 from datetime import datetime, timezone
+from urllib.parse import unquote
 
 from sqlalchemy import select
 from sqlalchemy.orm import selectinload
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.config import settings
 from app.core.exceptions import (
     InvalidMessageRoleError,
     MessageNotFoundError,
@@ -14,12 +17,72 @@ from app.core.exceptions import (
     SessionNotFoundError,
 )
 from app.core.logger import get_logger
+from app.models.attachment import Attachment
 from app.models.message import Message, RoleEnum
 from app.models.session import Session
 from app.models.source import Source
 from app.services import llm_client
 
 logger = get_logger(__name__)
+
+# 답변 텍스트 속 AI 서버 생성 문서 링크 (예: /files/MARS_%EB%8B%B5%EB%B3%80_...hwpx)
+_FILE_LINK_RE = re.compile(r"/files/([^\s\"'<>()\[\]]+)")
+
+
+async def _collect_attachments(
+    answer: str, extra_names: list[str] | None = None
+) -> tuple[str, list[Attachment], list[dict]]:
+    """답변 속 /files/ 링크와 file 이벤트로 알려진 파일을 AI 서버에서 내려받는다.
+
+    AI 서버 파일은 정리 주기에 따라 삭제되므로 즉시 받아 보관하고,
+    텍스트 링크는 미들웨어 다운로드 URL로 치환해 반환한다.
+    다운로드 실패 시 해당 파일만 건너뛰고 원본 링크를 유지한다.
+    """
+    attachments: list[Attachment] = []
+    items: list[dict] = []
+
+    # (치환할 링크 조각 | None, 파일명) 목록 — 텍스트 링크 우선, file 이벤트로만 알려진 파일은 치환 없이 저장
+    targets: list[tuple[str | None, str]] = []
+    seen: set[str] = set()
+    for raw in dict.fromkeys(_FILE_LINK_RE.findall(answer)):
+        name = unquote(raw)
+        targets.append((raw, name))
+        seen.add(name)
+    for extra in extra_names or []:
+        name = unquote(extra)
+        if name not in seen:
+            targets.append((None, name))
+            seen.add(name)
+
+    for raw, name in targets:
+        result = await llm_client.download_file(name)
+        if result is None:
+            continue
+        data, content_type = result
+        if len(data) > settings.max_attachment_size_mb * 1024 * 1024:
+            logger.warning("첨부 크기 초과로 저장 생략 name=%s size=%d", name, len(data))
+            continue
+
+        attachment = Attachment(
+            attachment_id=uuid.uuid4(),
+            name=name,
+            content_type=content_type,
+            size=len(data),
+            data=data,
+        )
+        url = f"/api/v1/files/{attachment.attachment_id}"
+        if raw:
+            answer = answer.replace(f"/files/{raw}", url)
+        attachments.append(attachment)
+        items.append({
+            "attachment_id": str(attachment.attachment_id),
+            "name": name,
+            "size": len(data),
+            "url": url,
+        })
+        logger.info("생성 문서 저장 name=%s size=%d", name, len(data))
+
+    return answer, attachments, items
 
 
 def _to_llm_messages(messages: list[Message]) -> list[dict]:
@@ -52,6 +115,7 @@ async def _save_messages(
     question: str,
     answer: str,
     sources: list[dict],
+    attachments: list[Attachment] | None = None,
 ) -> None:
     db.add(Message(session_id=session_id, role=RoleEnum.human, content=question))
     ai_message = Message(session_id=session_id, role=RoleEnum.ai, content=answer)
@@ -65,9 +129,16 @@ async def _save_messages(
             page=item.get("page"),
         ))
 
+    for attachment in attachments or []:
+        attachment.message_id = ai_message.message_id
+        db.add(attachment)
+
     session.updated_at = datetime.now(timezone.utc)
     await db.commit()
-    logger.info("메시지 저장 완료 — human + ai length=%d, sources=%d", len(answer), len(sources))
+    logger.info(
+        "메시지 저장 완료 — human + ai length=%d, sources=%d, attachments=%d",
+        len(answer), len(sources), len(attachments or []),
+    )
 
 
 async def _save_ai_message(
@@ -76,6 +147,7 @@ async def _save_ai_message(
     session_id: uuid.UUID,
     answer: str,
     sources: list[dict],
+    attachments: list[Attachment] | None = None,
 ) -> None:
     ai_message = Message(session_id=session_id, role=RoleEnum.ai, content=answer)
     db.add(ai_message)
@@ -88,9 +160,16 @@ async def _save_ai_message(
             page=item.get("page"),
         ))
 
+    for attachment in attachments or []:
+        attachment.message_id = ai_message.message_id
+        db.add(attachment)
+
     session.updated_at = datetime.now(timezone.utc)
     await db.commit()
-    logger.info("AI 메시지 재저장 완료 length=%d, sources=%d", len(answer), len(sources))
+    logger.info(
+        "AI 메시지 재저장 완료 length=%d, sources=%d, attachments=%d",
+        len(answer), len(sources), len(attachments or []),
+    )
 
 
 async def get_messages(db: AsyncSession, session_id: uuid.UUID, user_id: uuid.UUID) -> list[Message]:
@@ -99,7 +178,7 @@ async def get_messages(db: AsyncSession, session_id: uuid.UUID, user_id: uuid.UU
         select(Message)
         .where(Message.session_id == session_id)
         .order_by(Message.created_at.asc())
-        .options(selectinload(Message.sources))
+        .options(selectinload(Message.sources), selectinload(Message.attachments))
     )
     messages = list(result.all())
     logger.info("메시지 이력 조회 session_id=%s count=%d", session_id, len(messages))
@@ -180,6 +259,7 @@ async def regenerate_stream(
 
     accumulated: list[str] = []
     pending_sources: list[dict] = []
+    pending_file_names: list[str] = []
 
     async for raw in llm_client.stream_chat(question, llm_messages, domain=domain, tool=tool):
         event = _parse_event(raw)
@@ -191,7 +271,10 @@ async def regenerate_stream(
                 logger.warning("LLM 빈 응답 수신 session_id=%s", session_id)
                 yield f"data: {json.dumps({'type': 'error', 'message': 'LLM이 빈 응답을 반환했습니다.'})}\n\n"
                 return
-            await _save_ai_message(db, session, session_id, answer, pending_sources)
+            answer, attachments, file_items = await _collect_attachments(answer, pending_file_names)
+            await _save_ai_message(db, session, session_id, answer, pending_sources, attachments)
+            if file_items:
+                yield f"data: {json.dumps({'type': 'files', 'items': file_items}, ensure_ascii=False)}\n\n"
             yield f"data: {raw}\n\n"
             return
 
@@ -210,7 +293,23 @@ async def regenerate_stream(
             yield f"data: {raw}\n\n"
             continue
 
-        accumulated.append(event["content"] if event and event.get("type") == "text" else raw)
+        if event_type == "file":
+            # AI 서버의 생성 문서 알림 이벤트. done 시점에 저장 후 미들웨어 files
+            # 이벤트로 통합 전달하므로 원본(AI 서버 경로)은 프론트에 넘기지 않는다
+            if event.get("name"):
+                pending_file_names.append(event["name"])
+            continue
+
+        if event_type == "text":
+            accumulated.append(event.get("content", ""))
+            yield f"data: {raw}\n\n"
+            continue
+
+        if event is None:
+            # 구형 형식: 타입 없는 일반 문자열 토큰
+            accumulated.append(raw)
+
+        # 미지의 타입 이벤트는 답변 텍스트에 섞지 않고 그대로 통과시킨다
         yield f"data: {raw}\n\n"
 
 
@@ -235,6 +334,7 @@ async def chat_stream(
 
     accumulated: list[str] = []
     pending_sources: list[dict] = []
+    pending_file_names: list[str] = []
 
     async for raw in llm_client.stream_chat(question, llm_messages, domain=domain, tool=tool):
         event = _parse_event(raw)
@@ -246,7 +346,10 @@ async def chat_stream(
                 logger.warning("LLM 빈 응답 수신 session_id=%s", session_id)
                 yield f"data: {json.dumps({'type': 'error', 'message': 'LLM이 빈 응답을 반환했습니다.'})}\n\n"
                 return
-            await _save_messages(db, session, session_id, question, answer, pending_sources)
+            answer, attachments, file_items = await _collect_attachments(answer, pending_file_names)
+            await _save_messages(db, session, session_id, question, answer, pending_sources, attachments)
+            if file_items:
+                yield f"data: {json.dumps({'type': 'files', 'items': file_items}, ensure_ascii=False)}\n\n"
             yield f"data: {raw}\n\n"
             return
 
@@ -265,5 +368,21 @@ async def chat_stream(
             yield f"data: {raw}\n\n"
             continue
 
-        accumulated.append(event["content"] if event and event.get("type") == "text" else raw)
+        if event_type == "file":
+            # AI 서버의 생성 문서 알림 이벤트. done 시점에 저장 후 미들웨어 files
+            # 이벤트로 통합 전달하므로 원본(AI 서버 경로)은 프론트에 넘기지 않는다
+            if event.get("name"):
+                pending_file_names.append(event["name"])
+            continue
+
+        if event_type == "text":
+            accumulated.append(event.get("content", ""))
+            yield f"data: {raw}\n\n"
+            continue
+
+        if event is None:
+            # 구형 형식: 타입 없는 일반 문자열 토큰
+            accumulated.append(raw)
+
+        # 미지의 타입 이벤트는 답변 텍스트에 섞지 않고 그대로 통과시킨다
         yield f"data: {raw}\n\n"

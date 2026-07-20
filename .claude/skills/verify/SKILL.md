@@ -21,6 +21,15 @@ description: llm-backend 변경사항을 실제 서버를 띄워 API 레벨에�
 4. httpx 드라이버 스크립트로 대상 엔드포인트 호출 + 에러 프로브(401/403/404/422)
 5. asyncpg로 DB 상태 직접 조회해 영속화 확인
 
+## 요령
+
+- AI 서버 LLM(generate)이 불안정해도 `tool=HWP_EXPORT`는 LLM 없이 동작 — 대화 이력(human+ai)을
+  DB에 직접 INSERT로 시드한 뒤 "방금 답변을 한글 문서로 만들어줘" + `tool=HWP_EXPORT`로
+  문서 생성·첨부 파이프라인을 확정적으로 유도할 수 있음
+- 스트리밍 `files` 이벤트의 `url`은 origin 기준 상대경로(`/api/v1/...`) —
+  base_url이 `/api/v1`인 httpx 클라이언트에 그대로 붙이면 `/api/v1/api/v1/...` 이중 프리픽스로 404 남
+  (FastAPI 기본 `{"detail":"Not Found"}` 응답이면 라우트 미매칭 신호)
+
 ## 주의
 
 - 테스트 유저 이메일은 식별 가능한 패턴(예: `fav-test-*@example.com`)으로 만들고, 끝나면

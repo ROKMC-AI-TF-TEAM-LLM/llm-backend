@@ -25,7 +25,8 @@ llm-backend/
 │   │   ├── user.py                    # User, UserRole, ApprovalStatus
 │   │   ├── session.py                 # Session
 │   │   ├── message.py                 # Message, RoleEnum
-│   │   └── source.py                  # Source (메시지 출처)
+│   │   ├── source.py                  # Source (메시지 출처)
+│   │   └── attachment.py              # Attachment (AI 생성 문서, BYTEA 보관)
 │   ├── schemas/
 │   │   ├── common.py                  # ApiResponse (공통 응답 래퍼)
 │   │   ├── user.py                    # UserCreate, UserUpdate, UserResponse 등
@@ -41,6 +42,7 @@ llm-backend/
 │   │   ├── message_service.py         # 메시지 저장, LLM 스트리밍, 출처 저장
 │   │   ├── document_service.py        # LLM 서버 문서 목록 프록시
 │   │   ├── capability_service.py      # LLM 서버 domain·tool 목록 프록시
+│   │   ├── file_service.py            # 생성 문서(첨부) 조회 + 소유권 검증
 │   │   ├── health_service.py          # DB / LLM 서버 헬스체크
 │   │   └── llm_client.py              # LLM 서버 HTTP 스트리밍 클라이언트
 │   └── api/v1/routes/
@@ -51,7 +53,8 @@ llm-backend/
 │       ├── message.py                 # GET|POST /sessions/{id}/messages
 │       ├── admin.py                   # GET|PATCH|DELETE /admin/users
 │       ├── document.py                # GET /documents
-│       └── capability.py              # GET /capabilities
+│       ├── capability.py              # GET /capabilities
+│       └── file.py                    # GET /files/{attachment_id}
 ├── alembic/                           # DB 마이그레이션
 ├── main.py                            # 서버 실행 진입점
 ├── .env                               # 환경변수 (git 제외)
@@ -80,6 +83,7 @@ llm-backend/
 | POST | `/api/v1/sessions/{id}/messages/{msg_id}/regenerate` | AI 응답 재생성 (SSE) | 필요 |
 | GET | `/api/v1/documents` | RAG 문서 목록 (offset 기반, `domain` 필터) | 필요 |
 | GET | `/api/v1/capabilities` | 채팅에 사용 가능한 domain·tool 목록 | 필요 |
+| GET | `/api/v1/files/{attachment_id}` | AI 생성 문서(HWPX 등) 다운로드 | 필요 |
 | GET | `/api/v1/admin/users` | 전체 회원 목록 (cursor 기반, 필터/검색) | 관리자 |
 | GET | `/api/v1/admin/users/{id}` | 회원 상세 조회 | 관리자 |
 | PATCH | `/api/v1/admin/users/{id}/approve` | 회원 가입 승인 | 관리자 |
@@ -224,6 +228,9 @@ data: {"type": "text", "content": "하세요"}
 // 참조 문서 출처
 data: {"type": "sources", "items": [{"name": "doc.pdf", "page": "3"}]}
 
+// AI 생성 문서 (미들웨어가 저장 후 done 직전에 전송 — 다운로드 버튼 렌더용)
+data: {"type": "files", "items": [{"attachment_id": "...", "name": "MARS_답변_20260720.hwpx", "size": 34816, "url": "/api/v1/files/{attachment_id}"}]}
+
 // 응답 완료
 data: {"type": "done"}
 
@@ -233,9 +240,22 @@ data: {"type": "error", "message": "오류 내용"}
 
 > **재생성 흐름:** `regenerate` 엔드포인트는 기존 AI 메시지를 삭제하고 동일한 질문으로 LLM에 재요청합니다. `message_id`는 반드시 `role: "ai"`인 메시지여야 합니다.
 
+## AI 생성 문서 (첨부파일)
+
+AI가 답변으로 문서(HWPX 등)를 생성하면 미들웨어가 **답변 완료 시점에 AI 서버에서 파일을 즉시 내려받아 DB에 보관**합니다.
+AI 서버의 원본 파일은 정리 주기에 따라 삭제될 수 있지만, 미들웨어에 보관된 사본으로 과거 대화에서도 계속 다운로드할 수 있습니다.
+
+- 답변 텍스트 속 `/files/...` 링크는 저장 시 `/api/v1/files/{attachment_id}`로 치환됨
+- AI 서버가 보내는 `{"type": "file", "name": ...}` 이벤트는 미들웨어가 흡수해 저장에 사용하고 프론트로는 전달하지 않음 (프론트는 미들웨어의 `files` 이벤트만 처리하면 됨)
+- 스트리밍 종료 직전 `{"type": "files", "items": [...]}` 이벤트로 프론트에 전달
+- 메시지 이력 조회 시 각 메시지의 `attachments` 배열로 복원 가능
+- 다운로드는 인증 필요 — `<a href>` 대신 **fetch → blob 방식** 사용 (Authorization 헤더 필요)
+- 메시지/세션 삭제 시 첨부도 함께 삭제됨 (CASCADE)
+- 파일 크기 상한: `MAX_ATTACHMENT_SIZE_MB` (기본 20MB, 초과 시 저장 생략)
+
 ## 메시지 이력 응답
 
-AI 응답에 참조한 문서 정보가 `sources` 배열로 함께 반환됩니다. 각 메시지에 `message_id`가 포함됩니다.
+AI 응답에 참조한 문서 정보가 `sources` 배열로, 생성 문서가 `attachments` 배열로 함께 반환됩니다. 각 메시지에 `message_id`가 포함됩니다.
 
 ```json
 // GET /api/v1/sessions/{id}/messages 응답 예시
@@ -256,6 +276,9 @@ AI 응답에 참조한 문서 정보가 `sources` 배열로 함께 반환됩니�
       "created_at": "2026-06-28T23:34:53Z",
       "sources": [
         { "name": "doc.pdf", "page": "3" }
+      ],
+      "attachments": [
+        { "attachment_id": "8f14e45f-...", "name": "MARS_답변_20260720_105915.hwpx", "size": 34816 }
       ]
     }
   ]
@@ -377,6 +400,7 @@ alembic upgrade head
 |------|--------|------|
 | `LLM_SERVER_URL` | `http://localhost:8001` | LLM 서버 주소 |
 | `REQUEST_TIMEOUT` | `60` | 연결 타임아웃 (초, read는 무제한) |
+| `MAX_ATTACHMENT_SIZE_MB` | `20` | AI 생성 문서 저장 크기 상한 (MB) |
 | `DATABASE_URL` | — | PostgreSQL 연결 문자열 (`postgresql+asyncpg://user:pw@host:5432/db`) |
 | `JWT_SECRET_KEY` | — | JWT 서명 키 (반드시 환경변수로 설정) |
 | `JWT_ALGORITHM` | `HS256` | JWT 알고리즘 |

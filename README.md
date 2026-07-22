@@ -39,7 +39,8 @@ llm-backend/
 │   │   ├── session.py                 # Session
 │   │   ├── message.py                 # Message, RoleEnum
 │   │   ├── source.py                  # Source (메시지 출처)
-│   │   └── attachment.py              # Attachment (AI 생성 문서, BYTEA 보관)
+│   │   ├── attachment.py              # Attachment (AI 생성 문서, BYTEA 보관)
+│   │   └── document.py                # Document (문서 등록 이력, VisibilityEnum)
 │   ├── schemas/
 │   │   ├── common.py                  # ApiResponse (공통 응답 래퍼)
 │   │   ├── user.py                    # UserCreate, UserUpdate, UserResponse 등

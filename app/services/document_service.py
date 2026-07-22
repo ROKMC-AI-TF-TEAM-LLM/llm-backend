@@ -1,9 +1,9 @@
 import httpx
 
 from app.core.config import settings
-from app.core.exceptions import LLMServerError
-from app.core.exceptions import FileTooLargeError
+from app.core.exceptions import LLMServerError, FileTooLargeError, ConflictError, NotFoundError
 from app.core.logger import get_logger
+from urllib.parse import quote
 
 logger = get_logger(__name__)
 
@@ -62,6 +62,26 @@ async def get_job(job_id: str) -> dict | None:
         raise LLMServerError(detail="LLM 서버에 연결할 수 없습니다.")
     
 
+async def delete_document(name: str) -> dict:
+    url = f"{settings.llm_server_url}/documents/{quote(name)}"
+    try:
+        async with httpx.AsyncClient(timeout=settings.request_timeout) as client:
+            response = await client.delete(url)
+            response.raise_for_status()
+            return response.json()
+    except httpx.HTTPStatusError as e:
+        status= e.response.status_code
+        if status == 404:
+            logger.error("존재 하지 않는 문서 status=%d name=%s",status,name)
+            raise NotFoundError(detail="존재하지 않는 문서입니다.")
+        if status == 409:
+            logger.error("다른 적재/삭제 작업 진행 중 status=%d",status)
+            raise ConflictError(detail="현재 다른 적재/삭제 작업이 진행 중 입니다.")
+        logger.error("문서 삭제 실패 status=%d url=%s", status, url)
+        raise LLMServerError(detail=f"LLM 서버 오류: HTTP {status}")
+    except Exception:
+        logger.error("LLM 서버 연결 오류 url=%s", url)
+        raise LLMServerError(detail="LLM 서버에 연결할 수 없습니다.")
 
 async def get_documents(offset: int, limit: int, domain: str | None = None) -> dict:
     url = f"{settings.llm_server_url}/documents"

@@ -42,6 +42,27 @@ async def relay_document(
         raise LLMServerError(detail="LLM 서버에 연결할 수 없습니다.")
     
 
+async def get_job(job_id: str) -> dict | None:
+    url = f"{settings.llm_server_url}/documents/jobs/{job_id}"
+
+    try:
+        async with httpx.AsyncClient(timeout=settings.request_timeout) as client:
+            response = await client.get(url)
+            response.raise_for_status()
+            return response.json()
+    except httpx.HTTPStatusError as e:
+        status = e.response.status_code
+        if status == 404:
+            logger.warning("job 이 없음 (LLM 서버 재시작 추정) job_id=%s",job_id)
+            return None #정보 없음을 None으로 알림.
+        logger.error("작업 조회 실패 status=%d job_id=%s", status, job_id)
+        raise LLMServerError(detail=f"LLM 서버 오류: HTTP {status}")
+    except Exception:
+        logger.error("LLM 서버 연결 오류 url=%s", url)
+        raise LLMServerError(detail="LLM 서버에 연결할 수 없습니다.")
+    
+
+
 async def get_documents(offset: int, limit: int, domain: str | None = None) -> dict:
     url = f"{settings.llm_server_url}/documents"
     params: dict = {"offset": offset, "limit": limit}

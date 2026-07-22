@@ -38,7 +38,7 @@ class Document(Base):
     size: Mapped[int] = mapped_column(Integer, nullable=False)
     # deferred: 목록 조회 시 원본 바이너리가 로딩되지 않도록 한다
     data: Mapped[bytes] = mapped_column(LargeBinary, nullable=False, deferred=True)
-
+    #상태 저장 
     status: Mapped[IndexStatusEnum] = mapped_column(
         Enum(IndexStatusEnum), nullable=False, default=IndexStatusEnum.PENDING
     )

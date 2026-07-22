@@ -2,7 +2,7 @@ import enum
 import uuid
 from datetime import datetime, timezone
 
-from sqlalchemy import DateTime, Enum, ForeignKey, String
+from sqlalchemy import DateTime, Enum, ForeignKey, Integer, LargeBinary, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base
@@ -27,6 +27,12 @@ class Document(Base):
     visibility: Mapped[VisibilityEnum] = mapped_column(
         Enum(VisibilityEnum), nullable=False, default=VisibilityEnum.ALL
     )
+    content_type: Mapped[str] = mapped_column(
+        String(100), nullable=False, default="application/octet-stream"
+    )
+    size: Mapped[int] = mapped_column(Integer, nullable=False)
+    # deferred: 목록 조회 시 원본 바이너리가 로딩되지 않도록 한다
+    data: Mapped[bytes] = mapped_column(LargeBinary, nullable=False, deferred=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         default=lambda: datetime.now(timezone.utc),

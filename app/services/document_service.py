@@ -2,10 +2,45 @@ import httpx
 
 from app.core.config import settings
 from app.core.exceptions import LLMServerError
+from app.core.exceptions import FileTooLargeError
 from app.core.logger import get_logger
 
 logger = get_logger(__name__)
 
+
+async def relay_document(
+        name: str,
+        domain: str,
+        visibility: str,
+        data: bytes,
+        department: str | None = None
+    ) -> dict:
+    url = f"{settings.llm_server_url}/documents"
+    params: dict[str, str] = {"name": name, "domain": domain, "visibility": visibility}
+    if department:
+        params["department"] = department #department는 조건부 필수라
+    try:
+        async with httpx.AsyncClient(timeout=settings.request_timeout) as client:
+            response = await client.post(
+                url,
+                params=params,
+                content=data,
+                headers={"Content-Type": "application/octet-stream"} #mulitpart 아님 
+            )
+            response.raise_for_status()
+            return response.json()
+    except httpx.HTTPStatusError as e:
+        status = e.response.status_code
+        if status == 413:
+            logger.error("문서 용량 초과 name=%s", name)
+            raise FileTooLargeError(detail=f"업로드 파일 용량 50MB 초과 (파일이름: {name})") #전용 예외 처리
+            
+        logger.error("문서 relay 실패 status=%d name=%s", status, name)
+        raise LLMServerError(detail=f"LLM서버 적재 요청 실패: HTTP {status}")
+    except Exception:
+        logger.error("LLM 서버 연결 오류 url=%s", url)
+        raise LLMServerError(detail="LLM 서버에 연결할 수 없습니다.")
+    
 
 async def get_documents(offset: int, limit: int, domain: str | None = None) -> dict:
     url = f"{settings.llm_server_url}/documents"

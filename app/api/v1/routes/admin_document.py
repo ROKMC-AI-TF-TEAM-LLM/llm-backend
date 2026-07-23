@@ -3,11 +3,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
 from app.core.deps import get_current_admin
-from app.core.responses import R_401, R_403_ADMIN, R_422, R_502_LLM
+from app.core.responses import R_401, R_403_ADMIN, R_422, R_502_LLM, R_404_DOCUMENT
 from app.models.user import User
 from app.schemas.common import ApiResponse
-from app.schemas.document import DocumentUploadResponse
+from app.schemas.document import DocumentUploadResponse,DocumentStatusResponse
 from app.services import document_service
+import uuid
 
 router = APIRouter(prefix="/admin/documents", tags=["admin-documents"])
 
@@ -44,3 +45,17 @@ async def upload_document(
         user_id=admin.user_id,
     )
     return ApiResponse.ok(doc, status_code=202)
+
+
+@router.get(
+    "/{document_id}/status",
+    response_model=ApiResponse[DocumentStatusResponse],
+    responses={**R_401, **R_403_ADMIN, **R_404_DOCUMENT},  # 404 헬퍼 없으면 새로 만들거나 그냥 스펙만
+)
+async def get_status(
+    document_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(get_current_admin),
+):
+    doc = await document_service.get_document_status(db, document_id)
+    return ApiResponse.ok(doc)

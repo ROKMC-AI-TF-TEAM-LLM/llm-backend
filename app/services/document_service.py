@@ -1,7 +1,7 @@
 import httpx
 
 from app.core.config import settings
-from app.core.exceptions import LLMServerError, FileTooLargeError, ConflictError, NotFoundError
+from app.core.exceptions import LLMServerError, FileTooLargeError, ConflictError, DocumentNotFoundError
 from app.core.logger import get_logger
 from sqlalchemy.ext.asyncio import AsyncSession
 from urllib.parse import quote
@@ -77,7 +77,7 @@ async def delete_document(name: str) -> dict:
         status= e.response.status_code
         if status == 404:
             logger.error("존재 하지 않는 문서 status=%d name=%s",status,name)
-            raise NotFoundError(detail="존재하지 않는 문서입니다.")
+            raise DocumentNotFoundError(detail="존재하지 않는 문서입니다.")
         if status == 409:
             logger.error("다른 적재/삭제 작업 진행 중 status=%d",status)
             raise ConflictError(detail="현재 다른 적재/삭제 작업이 진행 중 입니다.")
@@ -141,4 +141,32 @@ async def upload_document(
         raise 
         
 
+    return doc
+
+
+async def get_document_status(db: AsyncSession, document_id: uuid.UUID) -> Document:
+    doc = await db.get(Document, document_id)      # 1. 조회 (없으면?)
+    if doc is None:
+        raise doc   # 기존 예외 재활용
+
+    if doc.job_id is None:
+        return doc                  # relay 전이거나 이미 끝난 상태 → DB 그대로
+
+    job = await get_job(doc.job_id)  # 2. MARS에 물어봄
+    if job is None:
+        return doc                  # 3. MARS가 모름(404) → DB 마지막 상태 그대로 (폴백!)
+
+    # 4. 번역해서 갱신
+    mars_status = job["status"]
+    if mars_status in ("queued", "running"):
+        doc.status = IndexStatusEnum.INDEXING
+    elif mars_status == "done":
+        doc.status = IndexStatusEnum.INDEXED
+        doc.chunks_indexed = job["chunks_indexed"]
+    elif mars_status == "error":
+        doc.status = IndexStatusEnum.FAILED
+        doc.error = job["error"]
+
+    await db.commit()
+    await db.refresh(doc)
     return doc

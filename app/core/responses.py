@@ -92,6 +92,13 @@ R_404_FILE = {
     )
 }
 
+R_404_DOCUMENT = {
+    404: _resp(
+        "문서 없음",
+        document_not_found=_ex(404, "DOCUMENT_NOT_FOUND", "문서를 찾을 수 없습니다.")
+    )
+}
+
 R_400_MESSAGE_ROLE = {
     400: _resp(
         "잘못된 메시지 역할",

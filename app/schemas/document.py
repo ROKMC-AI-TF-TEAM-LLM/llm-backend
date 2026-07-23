@@ -35,4 +35,9 @@ class DocumentUploadResponse(BaseModel):
     created_at: datetime
 
 
-#class DocumentDeleteResponse(BaseModel):
+class DocumentStatusResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    document_id: UUID
+    status: IndexStatusEnum
+    chunks_indexed: int | None = None
+    error: str | None = None

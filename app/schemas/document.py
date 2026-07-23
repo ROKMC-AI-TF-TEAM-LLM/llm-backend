@@ -62,3 +62,7 @@ class AdminDocumentListResponse(BaseModel):
     offset: int
     limit: int
     has_more: bool
+
+class DocumentDeleteResponse(BaseModel):
+    document_id: UUID
+    deleted_chunks: int

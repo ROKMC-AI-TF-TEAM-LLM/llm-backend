@@ -7,8 +7,9 @@ from app.core.deps import get_current_admin
 from app.core.responses import R_401, R_403_ADMIN, R_422, R_502_LLM, R_404_DOCUMENT
 from app.models.user import User
 from app.schemas.common import ApiResponse
-from app.schemas.document import DocumentUploadResponse,DocumentStatusResponse
+from app.schemas.document import DocumentUploadResponse,DocumentStatusResponse,DocumentDeleteResponse
 from app.services import document_service
+
 import uuid
 
 router = APIRouter(prefix="/admin/documents", tags=["admin-documents"])
@@ -92,3 +93,19 @@ async def list_admin_documents(
             has_more=has_more,
         )
     )
+
+
+@router.delete(
+    "/{document_id}",
+    response_model=ApiResponse[DocumentDeleteResponse],
+    summary="문서 삭제",
+    description="LLM 서버 Vector DB에서 청크를 삭제한 뒤 미들웨어 DB의 원본도 함께 삭제한다.",
+    responses={**R_401, **R_403_ADMIN, **R_404_DOCUMENT},
+)
+async def delete_document_route(
+    document_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(get_current_admin),
+):
+    result = await document_service.delete_document_admin(db, document_id)
+    return ApiResponse.ok(result)

@@ -1,12 +1,13 @@
 import httpx
 
 from app.core.config import settings
-from app.core.exceptions import LLMServerError, FileTooLargeError, ConflictError, DocumentNotFoundError
+from app.core.exceptions import LLMServerError, FileTooLargeError, ConflictError, DocumentNotFoundError, NotFoundError
 from app.core.logger import get_logger
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select,func 
 from urllib.parse import quote
 from app.models.document import Document, IndexStatusEnum
+from app.schemas.document import DocumentDeleteResponse
 import uuid
 
 
@@ -206,3 +207,27 @@ async def get_admin_documents(
     has_more = offset + len(documents) < total
 
     return documents, total, has_more
+
+
+
+async def delete_document_admin(db: AsyncSession, document_id: uuid.UUID) -> DocumentDeleteResponse:
+    # 1. id로 우리 DB에서 조회 (MARS는 name만 알아서 여기서 name을 꺼냄)
+    doc = await db.get(Document, document_id)
+    if doc is None:
+        raise DocumentNotFoundError()
+
+    # 2. MARS 먼저 삭제 (§7: MARS 먼저 → DB 나중)
+    try:
+        result = await delete_document(doc.name)
+        deleted_chunks = result["deleted_chunks"]
+    except NotFoundError:
+        # MARS에 이미 없음(색인 실패했거나 이미 지워짐) → 목표(MARS에 청크 없음)는 이미 달성 → 멱등 처리
+        deleted_chunks = 0
+    # ConflictError(409)나 LLMServerError는 여기서 안 잡음 → 그대로 위로 던져짐
+    # → DB는 안 지워짐(원본 유지, 재시도 가능) — 이것도 §7 원칙
+
+    # 3. MARS 삭제 성공(또는 멱등 확인) 후에만 DB 원본 삭제
+    await db.delete(doc)
+    await db.commit()
+
+    return DocumentDeleteResponse(document_id=document_id, deleted_chunks=deleted_chunks)

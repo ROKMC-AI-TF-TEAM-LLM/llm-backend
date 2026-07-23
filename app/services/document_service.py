@@ -6,7 +6,7 @@ from app.core.logger import get_logger
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select,func 
 from urllib.parse import quote
-from app.models.document import Document, IndexStatusEnum
+from app.models.document import Document
 from app.schemas.document import DocumentDeleteResponse
 import uuid
 
@@ -127,7 +127,7 @@ async def upload_document(
         size=len(data),          # ← 빠졌던 필수 필드
         department=department,
         user_id=user_id,
-        status=IndexStatusEnum.PENDING,
+        # status는 모델 default "pending" 사용
     )
     db.add(doc)
     await db.commit()
@@ -137,13 +137,14 @@ async def upload_document(
     try:
         relay_response = await relay_document(name=name, domain=domain, visibility=visibility, data=data, department=department)
     except Exception as e:
-        doc.status = IndexStatusEnum.FAILED
+        doc.status = "error"      # MARS에 못 보냄 → 로컬 실패 표시
         doc.error = str(e)
         await db.commit()
         raise
 
     doc.job_id = relay_response["job_id"]
-    doc.status = IndexStatusEnum.INDEXING
+    # MARS가 준 status를 그대로 저장 (없으면 방금 접수됐으니 queued)
+    doc.status = relay_response.get("status", "queued")
     await db.commit()
     await db.refresh(doc)
 
@@ -162,16 +163,10 @@ async def get_document_status(db: AsyncSession, document_id: uuid.UUID) -> Docum
     if job is None:
         return doc                  # 3. MARS가 모름(404) → DB 마지막 상태 그대로 (폴백!)
 
-    # 4. 번역해서 갱신
-    mars_status = job["status"]
-    if mars_status in ("queued", "running"):
-        doc.status = IndexStatusEnum.INDEXING
-    elif mars_status == "done":
-        doc.status = IndexStatusEnum.INDEXED
-        doc.chunks_indexed = job["chunks_indexed"]
-    elif mars_status == "error":
-        doc.status = IndexStatusEnum.FAILED
-        doc.error = job["error"]
+    # 4. MARS가 준 값을 번역 없이 그대로 저장
+    doc.status = job["status"]
+    doc.chunks_indexed = job.get("chunks_indexed")
+    doc.error = job.get("error")
 
     await db.commit()
     await db.refresh(doc)

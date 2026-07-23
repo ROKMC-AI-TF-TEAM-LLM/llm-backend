@@ -1,6 +1,5 @@
 from datetime import datetime
 from uuid import UUID
-from app.models.document import IndexStatusEnum
 from pydantic import BaseModel, ConfigDict
 
 
@@ -22,7 +21,7 @@ class AdminDocumentItem(BaseModel):
     domain: str | None = None
     visibility: str | None = None
     department: str | None = None
-    status: IndexStatusEnum | None = None
+    status: str | None = None
     created_at: datetime | None = None
     size: int | None = None
 
@@ -44,14 +43,14 @@ class DocumentUploadResponse(BaseModel):
     name: str
     domain: str
     visibility: str
-    status: IndexStatusEnum
+    status: str
     created_at: datetime
 
 
 class DocumentStatusResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
     document_id: UUID
-    status: IndexStatusEnum
+    status: str
     chunks_indexed: int | None = None
     error: str | None = None
 

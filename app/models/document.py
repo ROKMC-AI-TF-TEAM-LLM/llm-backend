@@ -28,7 +28,7 @@ class Document(Base):
         ForeignKey("users.user_id", ondelete="SET NULL"), nullable=True
     )
     domain: Mapped[str] = mapped_column(String(50), nullable=False)
-    department: Mapped[str] = mapped_column(String(100), nullable=False)
+    department: Mapped[str | None] = mapped_column(String(100), nullable=True)
     visibility: Mapped[VisibilityEnum] = mapped_column(
         Enum(VisibilityEnum), nullable=False, default=VisibilityEnum.ALL
     )

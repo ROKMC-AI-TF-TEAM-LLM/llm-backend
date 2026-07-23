@@ -133,15 +133,19 @@ async def upload_document(
     await db.commit()
     await db.refresh(doc)
 
-    #LLM 서버로 relay 
+    #LLM 서버로 relay
     try:
-        job = await relay_document(name=name, domain=domain, visibility=visibility, data=data, department=department)
+        relay_response = await relay_document(name=name, domain=domain, visibility=visibility, data=data, department=department)
     except Exception as e:
         doc.status = IndexStatusEnum.FAILED
         doc.error = str(e)
         await db.commit()
-        raise 
-        
+        raise
+
+    doc.job_id = relay_response["job_id"]
+    doc.status = IndexStatusEnum.INDEXING
+    await db.commit()
+    await db.refresh(doc)
 
     return doc
 

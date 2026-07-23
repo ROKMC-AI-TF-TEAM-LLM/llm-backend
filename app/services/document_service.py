@@ -116,7 +116,39 @@ async def upload_document(
         department: str | None,
         user_id: uuid.UUID | None,
 ) -> Document:
-    doc = Document(name,domain,visibility,data,content_type,department,user_id)
+    doc = Document(
+        name=name,
+        domain=domain,
+        visibility=visibility,
+        data=data,
+        content_type=content_type,
+        size=len(data),          # ← 빠졌던 필수 필드
+        department=department,
+        user_id=user_id,
+        status=IndexStatusEnum.PENDING,
+    )
     db.add(doc)
     await db.commit()
     await db.refresh(doc)
+
+    #LLM 서버로 relay 
+    try:
+        job = await relay_document(name=name, domain=domain, visibility=visibility, data=data, department=department)
+        
+    except httpx.HTTPStatusError as e:
+        status = e.response.status_code
+        if status == 413:
+            doc.status = IndexStatusEnum.FAILED
+            doc.error = "문서 용량 초과"
+            raise FileTooLargeError(detail=f"업로드 파일 용량 50MB 초과 (파일이름: {name})") #전용 예외 처리
+            
+        doc.status = IndexStatusEnum.FAILED
+        doc.error = "문서 적재 실패"
+        raise LLMServerError(detail=f"LLM서버 적재 요청 실패: HTTP {status}")
+    except Exception:
+        doc.status = IndexStatusEnum.FAILED
+        doc.error = "LLM 서버 연결 실패"
+        raise LLMServerError(detail="LLM 서버에 연결할 수 없습니다.")    
+        
+
+    return doc

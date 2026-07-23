@@ -97,6 +97,12 @@ class AttachmentNotFoundError(AppHTTPException):
     detail = "파일을 찾을 수 없습니다."
 
 
+class DocumentNotFoundError(AppHTTPException):
+    status_code = 404
+    error_code = "DOCUMENT_NOT_FOUND"
+    detail = "문서를 찾을 수 없습니다."
+
+
 class InvalidMessageRoleError(AppHTTPException):
     status_code = 400
     error_code = "INVALID_MESSAGE_ROLE"
@@ -115,6 +121,11 @@ class EmailAlreadyExistsError(AppHTTPException):
     error_code = "EMAIL_ALREADY_EXISTS"
     detail = "이미 사용 중인 이메일입니다."
 
+# 413
+class FileTooLargeError(AppHTTPException):
+    status_code = 413
+    error_code = "FILE_TOO_LARGE"
+    detail = "업로드할 파일 용량이 50MB를 초과하였습니다."
 
 # 502
 class LLMServerError(AppHTTPException):

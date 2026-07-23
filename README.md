@@ -96,6 +96,7 @@ llm-backend/
 | DELETE | `/api/v1/sessions/{id}/messages/{msg_id}` | 메시지 삭제 | 필요 |
 | POST | `/api/v1/sessions/{id}/messages/{msg_id}/regenerate` | AI 응답 재생성 (SSE) | 필요 |
 | GET | `/api/v1/documents` | RAG 문서 목록 (offset 기반, `domain` 필터) | 필요 |
+| GET | `/api/v1/documents/{name}/download` | 원본 문서 다운로드 (문서명 조회, 최신본) | 필요 |
 | GET | `/api/v1/capabilities` | 채팅에 사용 가능한 domain·tool 목록 | 필요 |
 | GET | `/api/v1/files/{attachment_id}` | AI 생성 문서(HWPX 등) 다운로드 | 필요 |
 | GET | `/api/v1/admin/users` | 전체 회원 목록 (cursor 기반, 필터/검색) | 관리자 |

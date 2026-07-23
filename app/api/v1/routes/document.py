@@ -1,7 +1,12 @@
-from fastapi import APIRouter, Depends, Query
+from urllib.parse import quote
 
+from fastapi import APIRouter, Depends, Query
+from fastapi.responses import Response
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.core.database import get_db
 from app.core.deps import get_current_user
-from app.core.responses import R_401, R_502_LLM
+from app.core.responses import R_401, R_404_DOCUMENT, R_502_LLM
 from app.models.user import User
 from app.schemas.common import ApiResponse
 from app.schemas.document import DocumentListResponse
@@ -31,5 +36,32 @@ async def get_documents(
 ):
     data = await document_service.get_documents(offset=offset, limit=limit, domain=domain)
     return ApiResponse.ok(data, status_code=200)
+
+
+@router.get(
+    "/{name}/download",
+    summary="원본 문서 다운로드",
+    description=(
+        "미들웨어 DB에 보관된 원본 문서 파일을 문서명(name)으로 조회해 다운로드합니다.\n\n"
+        "- `name`: 문서명 그대로 전달 (한글·공백은 URL 인코딩, 예: `/documents/%ED%9C%B4%EA%B0%80%EA%B7%9C%EC%A0%95.pdf/download`)\n"
+        "- 같은 이름의 문서가 여러 건이면 가장 최근 등록본을 반환합니다\n"
+        "- 인증 헤더가 필요하므로 프론트는 fetch → blob 방식으로 다운로드해야 합니다"
+    ),
+    responses={**R_401, **R_404_DOCUMENT},
+)
+async def download_document(
+    name: str,
+    _: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    doc = await document_service.get_document_file(db, name)
+    return Response(
+        content=doc.data,
+        media_type=doc.content_type,
+        headers={
+            "Content-Disposition": f"attachment; filename*=UTF-8''{quote(doc.name)}",
+            "Content-Length": str(doc.size),
+        },
+    )
 
 

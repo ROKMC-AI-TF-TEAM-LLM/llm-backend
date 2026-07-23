@@ -4,7 +4,8 @@ from app.core.config import settings
 from app.core.exceptions import LLMServerError, FileTooLargeError, ConflictError, DocumentNotFoundError, NotFoundError
 from app.core.logger import get_logger
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select,func 
+from sqlalchemy import select,func
+from sqlalchemy.orm import undefer
 from urllib.parse import quote
 from app.models.document import Document
 from app.schemas.document import DocumentDeleteResponse
@@ -207,6 +208,23 @@ async def get_admin_documents(
 
     return documents, total, has_more
 
+
+
+async def get_document_file(db: AsyncSession, name: str) -> Document:
+    """원본 문서를 문서명으로 조회한다 (바이너리 포함).
+
+    name은 unique 제약이 없으므로, 같은 이름이 여러 건이면 가장 최근 등록본을 반환한다.
+    """
+    doc = await db.scalar(
+        select(Document)
+        .where(Document.name == name)
+        .order_by(Document.created_at.desc())
+        .limit(1)
+        .options(undefer(Document.data))
+    )
+    if doc is None:
+        raise DocumentNotFoundError()
+    return doc
 
 
 async def delete_document_admin(db: AsyncSession, document_id: uuid.UUID) -> DocumentDeleteResponse:

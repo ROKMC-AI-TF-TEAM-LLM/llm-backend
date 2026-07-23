@@ -15,6 +15,7 @@ class DocumentItem(BaseModel):
     
 
 class AdminDocumentItem(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
     document_id : UUID 
     name: str
     content_type: str | None = None # type이 없음, type은 MARS에서 주는거라서, 추후 content type을 잘 가공해서 파일 확장자만 남기기. 

@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, File, Form, UploadFile
 from sqlalchemy.ext.asyncio import AsyncSession
-
+from fastapi import Query
+from app.schemas.document import AdminDocumentItem, AdminDocumentListResponse
 from app.core.database import get_db
 from app.core.deps import get_current_admin
 from app.core.responses import R_401, R_403_ADMIN, R_422, R_502_LLM, R_404_DOCUMENT
@@ -59,3 +60,35 @@ async def get_status(
 ):
     doc = await document_service.get_document_status(db, document_id)
     return ApiResponse.ok(doc)
+
+
+@router.get(
+    "",
+    response_model=ApiResponse[AdminDocumentListResponse],
+    summary="관리자 문서 목록 조회",
+    description=(
+        "미들웨어 DB에 저장된 관리자 문서 목록을 조회한다 (적재 상태 병기). "
+        "offset 기반 페이지네이션을 지원하며, domain 필터와 name 검색이 가능하다."
+    ),
+    responses={**R_401, **R_403_ADMIN},
+)
+async def list_admin_documents(
+    offset: int = Query(0, ge=0),
+    limit: int = Query(20, ge=1, le=100),
+    domain: str | None = Query(None),
+    search: str | None = Query(None),
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(get_current_admin),
+):
+    documents, total, has_more = await document_service.get_admin_documents(
+        db=db, offset=offset, limit=limit, domain=domain, search=search,
+    )
+    return ApiResponse.ok(
+        AdminDocumentListResponse(
+            documents=[AdminDocumentItem.model_validate(doc) for doc in documents],
+            total=total,
+            offset=offset,
+            limit=limit,
+            has_more=has_more,
+        )
+    )

@@ -4,6 +4,7 @@ from app.core.config import settings
 from app.core.exceptions import LLMServerError, FileTooLargeError, ConflictError, DocumentNotFoundError
 from app.core.logger import get_logger
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select,func 
 from urllib.parse import quote
 from app.models.document import Document, IndexStatusEnum
 import uuid
@@ -170,3 +171,38 @@ async def get_document_status(db: AsyncSession, document_id: uuid.UUID) -> Docum
     await db.commit()
     await db.refresh(doc)
     return doc
+
+
+async def get_admin_documents(
+    db: AsyncSession,
+    offset: int,
+    limit: int,
+    domain: str | None = None,
+    search: str | None = None,
+) -> tuple[list[Document], int, bool]:
+    # 1. 필터 조건을 먼저 만든다 (재사용할 거니까)
+    filters = []
+    if domain:
+        filters.append(Document.domain == domain)
+    if search:
+        filters.append(Document.name.ilike(f"%{search}%"))
+
+    # 2. total — 같은 필터로 개수만 세기
+    count_query = select(func.count()).select_from(Document).where(*filters)
+    total = await db.scalar(count_query)
+
+    # 3. 실제 목록 — 같은 필터 + offset/limit
+    list_query = (
+        select(Document)
+        .where(*filters)
+        .order_by(Document.created_at.desc())
+        .offset(offset)
+        .limit(limit)
+    )
+    result = await db.scalars(list_query)
+    documents = list(result.all())
+
+    # 계산
+    has_more = offset + len(documents) < total
+
+    return documents, total, has_more

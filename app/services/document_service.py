@@ -3,7 +3,11 @@ import httpx
 from app.core.config import settings
 from app.core.exceptions import LLMServerError, FileTooLargeError, ConflictError, NotFoundError
 from app.core.logger import get_logger
+from sqlalchemy.ext.asyncio import AsyncSession
 from urllib.parse import quote
+from app.models.document import Document, IndexStatusEnum
+import uuid
+
 
 logger = get_logger(__name__)
 
@@ -83,6 +87,7 @@ async def delete_document(name: str) -> dict:
         logger.error("LLM 서버 연결 오류 url=%s", url)
         raise LLMServerError(detail="LLM 서버에 연결할 수 없습니다.")
 
+
 async def get_documents(offset: int, limit: int, domain: str | None = None) -> dict:
     url = f"{settings.llm_server_url}/documents"
     params: dict = {"offset": offset, "limit": limit}
@@ -99,3 +104,19 @@ async def get_documents(offset: int, limit: int, domain: str | None = None) -> d
     except Exception:
         logger.error("LLM 서버 연결 오류 url=%s", url)
         raise LLMServerError(detail="LLM 서버에 연결할 수 없습니다.")
+    
+
+async def upload_document(
+        db: AsyncSession,
+        name: str,
+        domain: str,
+        visibility: str,
+        data : bytes,
+        content_type: str,
+        department: str | None,
+        user_id: uuid.UUID | None,
+) -> Document:
+    doc = Document(name,domain,visibility,data,content_type,department,user_id)
+    db.add(doc)
+    await db.commit()
+    await db.refresh(doc)

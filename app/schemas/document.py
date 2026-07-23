@@ -1,7 +1,7 @@
 from datetime import datetime
 from uuid import UUID
 from app.models.document import IndexStatusEnum
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 
 
 
@@ -26,11 +26,12 @@ class DocumentListResponse(BaseModel):
 
 
 class DocumentUploadResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
     document_id: UUID
     name: str
     domain: str
     visibility: str
-    status: str
+    status: IndexStatusEnum
     created_at: datetime
 
 

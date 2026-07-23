@@ -5,7 +5,7 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
-from app.api.v1.routes import admin, auth, capability, document, file, health, message, session, user
+from app.api.v1.routes import admin, admin_document, auth, capability, document, file, health, message, session, user
 from app.core.exceptions import AppHTTPException
 from app.core.logger import get_logger
 from app.schemas.common import ApiResponse
@@ -73,6 +73,7 @@ app.include_router(user.router, prefix="/api/v1")
 app.include_router(session.router, prefix="/api/v1")
 app.include_router(message.router, prefix="/api/v1")
 app.include_router(admin.router, prefix="/api/v1")
+app.include_router(admin_document.router, prefix="/api/v1")
 app.include_router(document.router, prefix="/api/v1")
 app.include_router(capability.router, prefix="/api/v1")
 app.include_router(file.router, prefix="/api/v1")

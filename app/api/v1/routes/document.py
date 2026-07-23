@@ -31,3 +31,5 @@ async def get_documents(
 ):
     data = await document_service.get_documents(offset=offset, limit=limit, domain=domain)
     return ApiResponse.ok(data, status_code=200)
+
+

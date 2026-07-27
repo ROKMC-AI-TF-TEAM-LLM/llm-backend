@@ -116,9 +116,10 @@ async def _save_messages(
     answer: str,
     sources: list[dict],
     attachments: list[Attachment] | None = None,
+    domain: str | None = None, 
 ) -> None:
-    db.add(Message(session_id=session_id, role=RoleEnum.human, content=question))
-    ai_message = Message(session_id=session_id, role=RoleEnum.ai, content=answer)
+    db.add(Message(session_id=session_id, role=RoleEnum.human, content=question, domain=domain))
+    ai_message = Message(session_id=session_id, role=RoleEnum.ai, content=answer, domain=domain)
     db.add(ai_message)
     await db.flush()
 
@@ -148,8 +149,9 @@ async def _save_ai_message(
     answer: str,
     sources: list[dict],
     attachments: list[Attachment] | None = None,
+    domain: str | None = None,
 ) -> None:
-    ai_message = Message(session_id=session_id, role=RoleEnum.ai, content=answer)
+    ai_message = Message(session_id=session_id, role=RoleEnum.ai, content=answer, domain=domain)
     db.add(ai_message)
     await db.flush()
 
@@ -272,7 +274,7 @@ async def regenerate_stream(
                 yield f"data: {json.dumps({'type': 'error', 'message': 'LLM이 빈 응답을 반환했습니다.'})}\n\n"
                 return
             answer, attachments, file_items = await _collect_attachments(answer, pending_file_names)
-            await _save_ai_message(db, session, session_id, answer, pending_sources, attachments)
+            await _save_ai_message(db, session, session_id, answer, pending_sources, attachments, domain)
             if file_items:
                 yield f"data: {json.dumps({'type': 'files', 'items': file_items}, ensure_ascii=False)}\n\n"
             yield f"data: {raw}\n\n"
@@ -347,7 +349,7 @@ async def chat_stream(
                 yield f"data: {json.dumps({'type': 'error', 'message': 'LLM이 빈 응답을 반환했습니다.'})}\n\n"
                 return
             answer, attachments, file_items = await _collect_attachments(answer, pending_file_names)
-            await _save_messages(db, session, session_id, question, answer, pending_sources, attachments)
+            await _save_messages(db, session, session_id, question, answer, pending_sources, attachments, domain)
             if file_items:
                 yield f"data: {json.dumps({'type': 'files', 'items': file_items}, ensure_ascii=False)}\n\n"
             yield f"data: {raw}\n\n"

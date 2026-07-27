@@ -37,6 +37,7 @@ class MessageResponse(BaseModel):
     role: RoleEnum
     content: str
     created_at: datetime
+    domain: str | None = None
     sources: list[SourceResponse] = []
     attachments: list[AttachmentResponse] = []
 

@@ -108,38 +108,17 @@ async def _verify_session(db: AsyncSession, session_id: uuid.UUID, user_id: uuid
     return session
 
 
-async def _save_messages(
+async def _save_question(
     db: AsyncSession,
     session: Session,
     session_id: uuid.UUID,
     question: str,
-    answer: str,
-    sources: list[dict],
-    attachments: list[Attachment] | None = None,
-    domain: str | None = None, 
+    domain: str | None = None,
 ) -> None:
     db.add(Message(session_id=session_id, role=RoleEnum.human, content=question, domain=domain))
-    ai_message = Message(session_id=session_id, role=RoleEnum.ai, content=answer, domain=domain)
-    db.add(ai_message)
-    await db.flush()
-
-    for item in sources:
-        db.add(Source(
-            message_id=ai_message.message_id,
-            name=item.get("name", ""),
-            page=item.get("page"),
-        ))
-
-    for attachment in attachments or []:
-        attachment.message_id = ai_message.message_id
-        db.add(attachment)
-
     session.updated_at = datetime.now(timezone.utc)
     await db.commit()
-    logger.info(
-        "메시지 저장 완료 — human + ai length=%d, sources=%d, attachments=%d",
-        len(answer), len(sources), len(attachments or []),
-    )
+    logger.info("질문 저장 완료 session_id=%s", session_id)
 
 
 async def _save_ai_message(
@@ -169,7 +148,7 @@ async def _save_ai_message(
     session.updated_at = datetime.now(timezone.utc)
     await db.commit()
     logger.info(
-        "AI 메시지 재저장 완료 length=%d, sources=%d, attachments=%d",
+        "AI 메시지 저장 완료 length=%d, sources=%d, attachments=%d",
         len(answer), len(sources), len(attachments or []),
     )
 
@@ -331,8 +310,11 @@ async def chat_stream(
         .where(Message.session_id == session_id)
         .order_by(Message.created_at.asc())
     )
+    
     llm_messages = _to_llm_messages(list(history.all()))
     logger.info("이전 대화 이력 %d건 전송", len(llm_messages))
+
+    await _save_question(db, session, session_id, question, domain)
 
     accumulated: list[str] = []
     pending_sources: list[dict] = []
@@ -349,7 +331,7 @@ async def chat_stream(
                 yield f"data: {json.dumps({'type': 'error', 'message': 'LLM이 빈 응답을 반환했습니다.'})}\n\n"
                 return
             answer, attachments, file_items = await _collect_attachments(answer, pending_file_names)
-            await _save_messages(db, session, session_id, question, answer, pending_sources, attachments, domain)
+            await _save_ai_message(db, session, session_id, answer, pending_sources, attachments, domain)
             if file_items:
                 yield f"data: {json.dumps({'type': 'files', 'items': file_items}, ensure_ascii=False)}\n\n"
             yield f"data: {raw}\n\n"

@@ -18,15 +18,20 @@ async def check_db(db: AsyncSession) -> bool:
 
 
 async def check_llm_server() -> bool:
-    url = f"{settings.llm_server_url}/health"
+    url = f"{settings.llm_server_url}/health?deep=true"
     try:
-        async with httpx.AsyncClient(timeout=5) as client:
+        async with httpx.AsyncClient(timeout=25) as client:
             res = await client.get(url)
             res.raise_for_status()
-        return True
+            status = res.json().get("status")
     except httpx.HTTPStatusError as e:
         logger.warning("LLM 서버 응답 오류 status=%d url=%s", e.response.status_code, url)
         return False
     except Exception:
         logger.warning("LLM 서버에 연결할 수 없습니다 url=%s", url)
         return False
+
+    if status != "ok":
+        logger.warning("LLM 서버 상태 이상 status=%s url=%s", status, url)
+        return False
+    return True

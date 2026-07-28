@@ -1,6 +1,7 @@
 import uuid
+from datetime import datetime
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -9,7 +10,7 @@ from app.core.deps import get_current_user
 from app.core.responses import R_400_MESSAGE_ROLE, R_401, R_403_SESSION, R_404_MESSAGE, R_404_SESSION, R_422
 from app.models.user import User
 from app.schemas.common import ApiResponse
-from app.schemas.message import ChatRequest, MessageListResponse, RegenerateRequest
+from app.schemas.message import ChatRequest, MessagePageResponse, MessageResponse, RegenerateRequest
 from app.services import message_service
 
 router = APIRouter(prefix="/sessions", tags=["messages"])
@@ -17,18 +18,33 @@ router = APIRouter(prefix="/sessions", tags=["messages"])
 
 @router.get(
     "/{session_id}/messages",
-    response_model=ApiResponse[MessageListResponse],
+    response_model=ApiResponse[MessagePageResponse],
     summary="메시지 목록 조회",
-    description="세션의 전체 대화 기록을 시간순으로 조회합니다. AI 응답 메시지에는 출처(sources) 정보가 포함됩니다.",
+    description=(
+        "세션의 대화 기록을 시간순(오래된 것 먼저)으로 조회합니다. cursor 기반 무한 스크롤을 지원합니다.\n\n"
+        "- 첫 요청: cursor 없이 호출 (최신 메시지부터)\n"
+        "- 다음 페이지(과거 메시지): 응답의 `next_cursor` 값을 cursor로 전달\n"
+        "- `has_next`가 false이면 더 이상 과거 메시지 없음\n"
+        "AI 응답 메시지에는 출처(sources) 정보가 포함됩니다."
+    ),
     responses={**R_401, **R_403_SESSION, **R_404_SESSION},
 )
 async def get_messages(
     session_id: uuid.UUID,
+    cursor: datetime | None = Query(None, description="이전 응답의 next_cursor 값"),
+    limit: int = Query(20, ge=1, le=100, description="한 번에 가져올 메시지 수"),
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    messages = await message_service.get_messages(db, session_id, current_user.user_id)
-    return ApiResponse.ok(MessageListResponse(session_id=session_id, messages=messages), status_code=200)
+    messages, has_next = await message_service.get_messages(
+        db, session_id, current_user.user_id, cursor=cursor, limit=limit
+    )
+    next_cursor = messages[0].created_at if has_next and messages else None
+    return ApiResponse.ok(MessagePageResponse(
+        items=[MessageResponse.model_validate(m) for m in messages],
+        next_cursor=next_cursor,
+        has_next=has_next,
+    ), status_code=200)
 
 
 @router.post(

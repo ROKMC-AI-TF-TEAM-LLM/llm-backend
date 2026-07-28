@@ -44,6 +44,7 @@ class MessageResponse(BaseModel):
     model_config = {"from_attributes": True}
 
 
-class MessageListResponse(BaseModel):
-    session_id: uuid.UUID
-    messages: list[MessageResponse]
+class MessagePageResponse(BaseModel):
+    items: list[MessageResponse]
+    next_cursor: datetime | None
+    has_next: bool

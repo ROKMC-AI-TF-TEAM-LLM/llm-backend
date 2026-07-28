@@ -153,17 +153,30 @@ async def _save_ai_message(
     )
 
 
-async def get_messages(db: AsyncSession, session_id: uuid.UUID, user_id: uuid.UUID) -> list[Message]:
+async def get_messages(
+    db: AsyncSession,
+    session_id: uuid.UUID,
+    user_id: uuid.UUID,
+    cursor: datetime | None = None,
+    limit: int = 20,
+) -> tuple[list[Message], bool]:
     await _verify_session(db, session_id, user_id)
-    result = await db.scalars(
+    query = (
         select(Message)
         .where(Message.session_id == session_id)
-        .order_by(Message.created_at.asc())
+        .order_by(Message.created_at.desc())
+        .limit(limit + 1)
         .options(selectinload(Message.sources), selectinload(Message.attachments))
     )
+    if cursor:
+        query = query.where(Message.created_at < cursor)
+    result = await db.scalars(query)
     messages = list(result.all())
-    logger.info("메시지 이력 조회 session_id=%s count=%d", session_id, len(messages))
-    return messages
+    has_next = len(messages) > limit
+    messages = messages[:limit]
+    messages.reverse()  # DESC로 가져온 걸 화면 표시용(오래된 것 먼저)으로 뒤집음
+    logger.info("메시지 이력 조회 session_id=%s count=%d has_next=%s", session_id, len(messages), has_next)
+    return messages, has_next
 
 
 async def delete_message(

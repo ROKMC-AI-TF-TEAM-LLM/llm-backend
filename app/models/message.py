@@ -25,8 +25,6 @@ class Message(Base):
     )
     role: Mapped[RoleEnum] = mapped_column(Enum(RoleEnum), nullable=False)
     domain: Mapped[str] = mapped_column(String(50), nullable=True)
-    # MySQL의 TEXT는 65,535바이트(utf8mb4 한글 약 2만자)라 LLM 답변에 부족할 수 있어
-    # MEDIUMTEXT(16MB)로 올린다
     content: Mapped[str] = mapped_column(
         Text().with_variant(MEDIUMTEXT(), "mysql"), nullable=False
     )

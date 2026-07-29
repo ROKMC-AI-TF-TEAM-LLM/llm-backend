@@ -51,8 +51,6 @@ def upgrade() -> None:
     sa.ForeignKeyConstraint(['user_id'], ['users.user_id'], ondelete='SET NULL'),
     sa.PrimaryKeyConstraint('document_id')
     )
-    # 모델에 index=True 선언이 없어 autogenerate가 잡지 못하므로 수기로 추가한다.
-    # 이 프로젝트는 원래 인덱스를 마이그레이션 파일에 직접 작성해왔고, 기존 이름을 그대로 유지한다.
     op.create_index('ix_documents_user_id', 'documents', ['user_id'])
     op.create_table('sessions',
     sa.Column('session_id', sa.Uuid(), nullable=False),

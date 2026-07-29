@@ -21,7 +21,6 @@ class Attachment(Base):
     )
     size: Mapped[int] = mapped_column(Integer, nullable=False)
     # deferred: 목록 조회 시 바이너리가 로딩되지 않도록 한다
-    # MySQL에서 LargeBinary는 BLOB(64KB)이 되어 첨부가 잘리므로 LONGBLOB으로 올린다
     data: Mapped[bytes] = mapped_column(
         LargeBinary().with_variant(LONGBLOB(), "mysql"), nullable=False, deferred=True
     )

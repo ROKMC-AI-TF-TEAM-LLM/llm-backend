@@ -7,8 +7,7 @@ class Settings(BaseSettings):
     max_attachment_size_mb: int = 20
     log_level: str = "INFO"
 
-    database_url: str = "postgresql+asyncpg://user:password@localhost:5432/llm_db"
-    db_disable_ssl: bool = False
+    database_url: str = "mysql+asyncmy://user:password@localhost:3306/llm_db?charset=utf8mb4"
 
     jwt_secret_key: str = "change-here"
     jwt_algorithm: str = "HS256"

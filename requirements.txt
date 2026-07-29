@@ -7,7 +7,7 @@ python-dotenv>=1.0.0
 
 # database
 sqlalchemy[asyncio]>=2.0.0
-asyncpg>=0.29.0 
+asyncmy>=0.2.11
 alembic>=1.13.0
 
 # auth

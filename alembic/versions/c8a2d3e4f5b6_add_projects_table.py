@@ -1,7 +1,7 @@
 """add_projects_table
 
 Revision ID: c8a2d3e4f5b6
-Revises: 3e41ce460097
+Revises: 40beb865983e
 Create Date: 2026-07-31 00:00:00.000000
 
 """
@@ -9,9 +9,10 @@ from typing import Sequence, Union
 
 import sqlalchemy as sa
 from alembic import op
+from sqlalchemy.dialects import mysql
 
 revision: str = 'c8a2d3e4f5b6'
-down_revision: Union[str, None] = '3e41ce460097'
+down_revision: Union[str, None] = '40beb865983e'
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
@@ -22,10 +23,10 @@ def upgrade() -> None:
         sa.Column('project_id', sa.Uuid(), nullable=False),
         sa.Column('user_id', sa.Uuid(), nullable=False),
         sa.Column('name', sa.String(length=255), nullable=False),
-        sa.Column('is_favorite', sa.Boolean(), nullable=False, server_default=sa.false()),
+        sa.Column('is_favorite', sa.Boolean(), nullable=False),
         sa.Column('instructions', sa.Text(), nullable=True),
-        sa.Column('created_at', sa.DateTime(timezone=True), nullable=False),
-        sa.Column('updated_at', sa.DateTime(timezone=True), nullable=False),
+        sa.Column('created_at', sa.DateTime(timezone=True).with_variant(mysql.DATETIME(fsp=6), 'mysql'), nullable=False),
+        sa.Column('updated_at', sa.DateTime(timezone=True).with_variant(mysql.DATETIME(fsp=6), 'mysql'), nullable=False),
         sa.ForeignKeyConstraint(['user_id'], ['users.user_id'], ondelete='CASCADE'),
         sa.PrimaryKeyConstraint('project_id'),
     )

@@ -8,8 +8,8 @@ description: llm-backend 변경사항을 실제 서버를 띄워 API 레벨에�
 ## 환경
 
 - 프로젝트에 venv 없음. 전역 Python 3.11에도 의존성 없음 → 스크래치패드에 venv 생성 후 설치:
-  `pip install "fastapi[standard]" "sqlalchemy[asyncio]" asyncpg "pydantic[email]" pydantic-settings httpx "python-jose[cryptography]" bcrypt alembic`
-- DB: 로컬 PostgreSQL, 접속 정보는 `.env`의 `DATABASE_URL` (`postgresql+asyncpg://...@localhost:5432/llm_db`)
+  `pip install "fastapi[standard]" "sqlalchemy[asyncio]" asyncmy "pydantic[email]" pydantic-settings httpx "python-jose[cryptography]" bcrypt alembic`
+- DB: 로컬 MySQL, 접속 정보는 `.env`의 `DATABASE_URL` (`mysql+asyncmy://...@localhost:3306/llm_db?charset=utf8mb4`)
 - 사용자가 자기 서버를 8080(main.py)에서 띄울 수 있으므로 검증용 서버는 **다른 포트**(예: 8123)로 실행:
   `python -m uvicorn app.main:app --host 127.0.0.1 --port 8123` (백그라운드)
 
@@ -17,9 +17,9 @@ description: llm-backend 변경사항을 실제 서버를 띄워 API 레벨에�
 
 1. `python -m alembic upgrade head` 로 마이그레이션 적용 (`alembic current`로 head 확인)
 2. `GET /api/v1/health` 로 db/llm_server 연결 확인
-3. 인증이 필요한 API는: signup → **asyncpg로 직접 `UPDATE users SET status='approved'`** (관리자 승인 대체) → login으로 토큰 획득
+3. 인증이 필요한 API는: signup → **asyncmy로 직접 `UPDATE users SET status='approved'`** (관리자 승인 대체) → login으로 토큰 획득
 4. httpx 드라이버 스크립트로 대상 엔드포인트 호출 + 에러 프로브(401/403/404/422)
-5. asyncpg로 DB 상태 직접 조회해 영속화 확인
+5. asyncmy로 DB 상태 직접 조회해 영속화 확인
 
 ## 요령
 

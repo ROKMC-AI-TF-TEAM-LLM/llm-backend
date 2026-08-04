@@ -45,4 +45,13 @@ class User(Base):
         nullable=False,
     )
 
-    sessions: Mapped[list["Session"]] = relationship(back_populates="user")
+    sessions: Mapped[list["Session"]] = relationship(
+        back_populates="user",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+    )
+    projects: Mapped[list["Project"]] = relationship(
+        back_populates="user",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+    )

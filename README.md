@@ -376,8 +376,8 @@ pip install -r requirements.txt
 # 2. 환경변수 설정
 # .env 파일 생성 후 아래 환경변수 항목 참고
 
-# 3. DB 생성 (PostgreSQL)
-# psql에서: CREATE DATABASE llm_db;
+# 3. DB 생성 (MySQL)
+# mysql에서: CREATE DATABASE llm_db CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
 # 4. 테이블 생성
 alembic upgrade head
@@ -407,7 +407,7 @@ alembic revision --autogenerate -m "변경 내용"
 alembic upgrade head
 ```
 
-> Enum 컬럼 추가/변경 시 자동 생성된 마이그레이션 파일에 `create()`/`drop()`을 수동으로 추가해야 합니다.
+> MySQL은 ENUM이 컬럼 정의에 인라인으로 들어가므로 별도 타입 생성/삭제 구문이 필요 없습니다.
 
 ## 환경변수
 
@@ -416,10 +416,9 @@ alembic upgrade head
 | `LLM_SERVER_URL` | `http://localhost:8001` | LLM 서버 주소 |
 | `REQUEST_TIMEOUT` | `60` | 연결 타임아웃 (초, read는 무제한) |
 | `MAX_ATTACHMENT_SIZE_MB` | `20` | AI 생성 문서 저장 크기 상한 (MB) |
-| `DATABASE_URL` | — | PostgreSQL 연결 문자열 (`postgresql+asyncpg://user:pw@host:5432/db`) |
+| `DATABASE_URL` | — | MySQL 연결 문자열 (`mysql+asyncmy://user:pw@host:3306/db?charset=utf8mb4`) |
 | `JWT_SECRET_KEY` | — | JWT 서명 키 (반드시 환경변수로 설정) |
 | `JWT_ALGORITHM` | `HS256` | JWT 알고리즘 |
 | `ACCESS_TOKEN_EXPIRE_MINUTES` | `30` | 액세스 토큰 만료 시간 (분) |
 | `REFRESH_TOKEN_EXPIRE_DAYS` | `7` | 리프레시 토큰 만료 시간 (일) |
 | `LOG_LEVEL` | `INFO` | 로그 레벨 (`DEBUG`, `INFO`, `WARNING`) |
-| `DB_DISABLE_SSL` | `false` | DB SSL 비활성화 여부 (로컬 개발 환경에서 `true` 설정) |

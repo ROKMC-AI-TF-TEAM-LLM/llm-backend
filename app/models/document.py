@@ -22,6 +22,10 @@ class Document(Base):
     user_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("users.user_id", ondelete="SET NULL"), nullable=True
     )
+    # NULL이면 전사 문서, 값이 있으면 해당 프로젝트 소유 문서
+    project_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("projects.project_id", ondelete="CASCADE"), nullable=True
+    )
     domain: Mapped[str] = mapped_column(String(50), nullable=False)
     department: Mapped[str | None] = mapped_column(String(100), nullable=True)
     visibility: Mapped[VisibilityEnum] = mapped_column(
@@ -58,3 +62,4 @@ class Document(Base):
     )
 
     user: Mapped["User"] = relationship()
+    project: Mapped["Project | None"] = relationship(back_populates="documents")

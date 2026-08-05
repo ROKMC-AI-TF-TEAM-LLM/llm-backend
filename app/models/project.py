@@ -16,7 +16,7 @@ class Project(Base):
     user_id: Mapped[uuid.UUID] = mapped_column(
         ForeignKey("users.user_id", ondelete="CASCADE"), nullable=False
     )
-    name: Mapped[str] = mapped_column(String(255), nullable=False)
+    title: Mapped[str] = mapped_column(String(255), nullable=False)
     is_favorite: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     # 프로젝트 내 대화에 공통으로 적용할 사용자 지정 지침
     instructions: Mapped[str | None] = mapped_column(Text, nullable=True)

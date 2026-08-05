@@ -1,10 +1,11 @@
 import uuid
 from datetime import datetime, timezone
 
-from sqlalchemy import DateTime, ForeignKey, Integer, LargeBinary, String
+from sqlalchemy import ForeignKey, Integer, LargeBinary, String
+from sqlalchemy.dialects.mysql import LONGBLOB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from app.core.database import Base
+from app.core.database import Base, Timestamp
 
 
 class Attachment(Base):
@@ -20,9 +21,11 @@ class Attachment(Base):
     )
     size: Mapped[int] = mapped_column(Integer, nullable=False)
     # deferred: 목록 조회 시 바이너리가 로딩되지 않도록 한다
-    data: Mapped[bytes] = mapped_column(LargeBinary, nullable=False, deferred=True)
+    data: Mapped[bytes] = mapped_column(
+        LargeBinary().with_variant(LONGBLOB(), "mysql"), nullable=False, deferred=True
+    )
     created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True),
+        Timestamp,
         default=lambda: datetime.now(timezone.utc),
         nullable=False,
     )

@@ -4,6 +4,7 @@ from datetime import datetime
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.exceptions import ProjectAccessDeniedError, ProjectNotFoundError
 from app.models.project import Project
 from app.schemas.project import ProjectCreate
 
@@ -43,3 +44,16 @@ async def get_projects(
     projects = list(result.all())
     has_next = len(projects) > size
     return projects[:size], has_next
+
+
+async def _get_project_owned(db: AsyncSession, project_id: uuid.UUID, user_id: uuid.UUID) -> Project:
+    project = await db.scalar(select(Project).where(Project.project_id == project_id))
+    if not project:
+        raise ProjectNotFoundError()
+    if project.user_id != user_id:
+        raise ProjectAccessDeniedError()
+    return project
+
+
+async def get_project(db: AsyncSession, project_id: uuid.UUID, user_id: uuid.UUID) -> Project:
+    return await _get_project_owned(db, project_id, user_id)

@@ -66,6 +66,12 @@ class SessionAccessDeniedError(AppHTTPException):
     detail = "접근 권한이 없습니다."
 
 
+class ProjectAccessDeniedError(AppHTTPException):
+    status_code = 403
+    error_code = "PROJECT_ACCESS_DENIED"
+    detail = "접근 권한이 없습니다."
+
+
 # 404
 class NotFoundError(AppHTTPException):
     status_code = 404
@@ -83,6 +89,12 @@ class SessionNotFoundError(AppHTTPException):
     status_code = 404
     error_code = "SESSION_NOT_FOUND"
     detail = "세션을 찾을 수 없습니다."
+
+
+class ProjectNotFoundError(AppHTTPException):
+    status_code = 404
+    error_code = "PROJECT_NOT_FOUND"
+    detail = "프로젝트를 찾을 수 없습니다."
 
 
 class MessageNotFoundError(AppHTTPException):

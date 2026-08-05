@@ -63,6 +63,13 @@ R_403_SESSION = {
     )
 }
 
+R_403_PROJECT = {
+    403: _resp(
+        "프로젝트 접근 거부",
+        access_denied=_ex(403, "PROJECT_ACCESS_DENIED", "접근 권한이 없습니다."),
+    )
+}
+
 # 404
 R_404_USER = {
     404: _resp(
@@ -75,6 +82,13 @@ R_404_SESSION = {
     404: _resp(
         "세션 없음",
         session_not_found=_ex(404, "SESSION_NOT_FOUND", "세션을 찾을 수 없습니다."),
+    )
+}
+
+R_404_PROJECT = {
+    404: _resp(
+        "프로젝트 없음",
+        project_not_found=_ex(404, "PROJECT_NOT_FOUND", "프로젝트를 찾을 수 없습니다."),
     )
 }
 

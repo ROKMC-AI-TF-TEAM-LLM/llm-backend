@@ -1,3 +1,4 @@
+import uuid
 from datetime import datetime
 
 from fastapi import APIRouter, Depends, Query, status
@@ -5,7 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
 from app.core.deps import get_current_user
-from app.core.responses import R_401, R_422
+from app.core.responses import R_401, R_403_PROJECT, R_404_PROJECT, R_422
 from app.models.user import User
 from app.schemas.common import ApiResponse
 from app.schemas.project import (
@@ -65,3 +66,19 @@ async def get_projects(
         next_cursor=next_cursor,
         has_next=has_next,
     ), status_code=200)
+
+
+@router.get(
+    "/{project_id}",
+    response_model=ApiResponse[ProjectDetailResponse],
+    summary="프로젝트 창 진입",
+    description="프로젝트 상세 정보를 조회합니다. 본인의 프로젝트만 조회 가능합니다.",
+    responses={**R_401, **R_403_PROJECT, **R_404_PROJECT, **R_422},
+)
+async def get_project(
+    project_id: uuid.UUID,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    project = await project_service.get_project(db, project_id, current_user.user_id)
+    return ApiResponse.ok(ProjectDetailResponse.model_validate(project), status_code=200)

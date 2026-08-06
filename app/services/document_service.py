@@ -1,7 +1,7 @@
 import httpx
 
 from app.core.config import settings
-from app.core.exceptions import LLMServerError, FileTooLargeError, ConflictError, DocumentNotFoundError, NotFoundError
+from app.core.exceptions import LLMServerError, FileTooLargeError, ConflictError, DocumentNotFoundError
 from app.core.logger import get_logger
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select,func
@@ -237,7 +237,7 @@ async def delete_document_admin(db: AsyncSession, document_id: uuid.UUID) -> Doc
     try:
         result = await delete_document(doc.name)
         deleted_chunks = result["deleted_chunks"]
-    except NotFoundError:
+    except DocumentNotFoundError:
         # MARS에 이미 없음(색인 실패했거나 이미 지워짐) → 목표(MARS에 청크 없음)는 이미 달성 → 멱등 처리
         deleted_chunks = 0
     # ConflictError(409)나 LLMServerError는 여기서 안 잡음 → 그대로 위로 던져짐

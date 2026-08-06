@@ -1,16 +1,16 @@
-fastapi[standard]>=0.115.0 # 낮은 버전 0.110.3
-uvicorn[standard]>=0.32.0 # 있음 
-httpx>=0.28.0 # 낮은 버전 0.27.2
-pydantic[email]>=2.10.0 # 낮은 버전 2.9.2
-pydantic-settings>=2.7.0 # 낮은 버전 2.6.0
-python-dotenv>=1.0.0 # 있음 
+fastapi[standard]>=0.115.0
+uvicorn[standard]>=0.32.0
+httpx>=0.28.0
+pydantic[email]>=2.10.0
+pydantic-settings>=2.7.0
+python-dotenv>=1.0.0
 
 # database
-sqlalchemy[asyncio]>=2.0.0 # 있음
-asyncpg>=0.29.0 # 없음 
-alembic>=1.13.0 # 없음 
+sqlalchemy[asyncio]>=2.0.0
+alembic>=1.13.0
+# aiomysql, pymysql 은 vendor/ 에 동봉 (설치 불필요)
 
 # auth
-bcrypt>=4.0.0 # 없음 
-python-jose[cryptography]>=3.3.0 # 없음
-python-multipart>=0.0.9 # 있음
+bcrypt>=4.0.0
+python-jose[cryptography]>=3.3.0
+python-multipart>=0.0.9

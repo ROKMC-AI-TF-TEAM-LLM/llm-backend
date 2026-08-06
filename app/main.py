@@ -16,7 +16,7 @@ logger = get_logger(__name__)
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
-    from app.core.database import AsyncSessionLocal
+    from app.core.database import AsyncSessionLocal, engine
     from app.services.health_service import check_db
 
     async with AsyncSessionLocal() as db:
@@ -26,6 +26,9 @@ async def lifespan(_app: FastAPI):
     llm_ok = await check_llm_server()
     logger.info("LLM 서버 연결 확인 완료") if llm_ok else None
     yield
+
+    await engine.dispose()
+    logger.info("DB 커넥션 풀 정리 완료")
 
 
 app = FastAPI(title="LLM Backend", lifespan=lifespan)

@@ -6,7 +6,9 @@ class Settings(BaseSettings):
     request_timeout: int = 60
     log_level: str = "INFO"
 
-    database_url: str = "postgresql+asyncpg://user:password@localhost:5432/llm_db"
+    database_url: str = (
+        "mysql+aiomysql://user:password@localhost:3306/llm_db?charset=utf8mb4"
+    )
     db_disable_ssl: bool = False
 
     jwt_secret_key: str = "change-here"

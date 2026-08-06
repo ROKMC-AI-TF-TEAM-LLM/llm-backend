@@ -1,10 +1,10 @@
 import uuid
 from datetime import datetime, timezone
 
-from sqlalchemy import DateTime, ForeignKey, String
+from sqlalchemy import ForeignKey, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from app.core.database import Base
+from app.core.database import Base, Timestamp
 
 
 class Source(Base):
@@ -12,12 +12,14 @@ class Source(Base):
 
     source_id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
     message_id: Mapped[uuid.UUID] = mapped_column(
-        ForeignKey("messages.message_id", ondelete="CASCADE"), nullable=False
+        ForeignKey("messages.message_id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
     )
     name: Mapped[str] = mapped_column(String(500), nullable=False)
     page: Mapped[str | None] = mapped_column(String(50), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True),
+        Timestamp,
         default=lambda: datetime.now(timezone.utc),
         nullable=False,
     )

@@ -257,12 +257,15 @@ AI 응답에 참조한 문서 정보가 `sources` 배열로 함께 반환됩니�
 ```bash
 # 1. 의존성 설치
 pip install -r requirements.txt
+# MySQL 드라이버(aiomysql, pymysql)는 폐쇄망 대응으로 vendor/ 에 동봉되어 있어
+# 별도 설치가 필요 없습니다. (app/__init__.py 가 vendor/ 를 sys.path 에 등록)
 
 # 2. 환경변수 설정
 # .env 파일 생성 후 아래 환경변수 항목 참고
 
-# 3. DB 생성 (PostgreSQL)
-# psql에서: CREATE DATABASE llm_db;
+# 3. DB 생성 (MySQL 8.0)
+# mysql에서: CREATE DATABASE prototype_db CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+# (기존 DB들과 collation을 맞춰야 JOIN 시 충돌이 없습니다)
 
 # 4. 테이블 생성
 alembic upgrade head
@@ -292,7 +295,28 @@ alembic revision --autogenerate -m "변경 내용"
 alembic upgrade head
 ```
 
-> Enum 컬럼 추가/변경 시 자동 생성된 마이그레이션 파일에 `create()`/`drop()`을 수동으로 추가해야 합니다.
+기존 PostgreSQL 기준 리비전 체인은 폐기하고, MySQL 8.0 기준 단일 베이스라인
+`b7c1e94f2a30_create_initial_schema_for_mysql.py` 하나로 재구성했습니다.
+
+### MySQL 마이그레이션 주의사항
+
+- **UUID**: `sa.UUID()`가 아니라 **`sa.Uuid()`**를 쓰세요. `sa.UUID()`는 MySQL에 없는
+  `UUID` 타입으로 컴파일돼 실패합니다 (`sa.Uuid()` → `CHAR(32)`).
+- **타임스탬프**: 모델에서는 `app.core.database.Timestamp`를 쓰고, 마이그레이션에서는
+  `sa.DateTime(timezone=True).with_variant(mysql.DATETIME(fsp=6), 'mysql')`를 쓰세요.
+  `fsp`를 빼면 마이크로초가 잘리는데, `created_at`/`updated_at`이 커서 페이지네이션
+  키라 동시각 레코드에서 누락·중복이 생깁니다.
+- **긴 텍스트**: MySQL `TEXT`는 64KB라 긴 LLM 답변이 잘립니다.
+  `sa.Text().with_variant(mysql.MEDIUMTEXT(), 'mysql')`를 쓰세요.
+- **Enum**: MySQL은 ENUM이 별도 타입이 아니라 컬럼 타입이라 `ALTER TYPE`이 없습니다.
+  기존 Enum의 **값 집합을 바꿀 때는** `ALTER TABLE ... MODIFY`로 값 집합을 넓힌 뒤
+  `UPDATE`로 데이터를 옮기고 다시 좁히는 3단계가 필요합니다.
+
+적용 전 실제 실행될 SQL을 확인하려면:
+
+```bash
+alembic upgrade head --sql
+```
 
 ## 환경변수
 
@@ -300,10 +324,10 @@ alembic upgrade head
 |------|--------|------|
 | `LLM_SERVER_URL` | `http://localhost:8001` | LLM 서버 주소 |
 | `REQUEST_TIMEOUT` | `60` | 연결 타임아웃 (초, read는 무제한) |
-| `DATABASE_URL` | — | PostgreSQL 연결 문자열 (`postgresql+asyncpg://user:pw@host:5432/db`) |
+| `DATABASE_URL` | — | MySQL 연결 문자열 (`mysql+aiomysql://user:pw@host:3306/db?charset=utf8mb4`) |
 | `JWT_SECRET_KEY` | — | JWT 서명 키 (반드시 환경변수로 설정) |
 | `JWT_ALGORITHM` | `HS256` | JWT 알고리즘 |
 | `ACCESS_TOKEN_EXPIRE_MINUTES` | `30` | 액세스 토큰 만료 시간 (분) |
 | `REFRESH_TOKEN_EXPIRE_DAYS` | `7` | 리프레시 토큰 만료 시간 (일) |
 | `LOG_LEVEL` | `INFO` | 로그 레벨 (`DEBUG`, `INFO`, `WARNING`) |
-| `DB_DISABLE_SSL` | `false` | DB SSL 비활성화 여부 (로컬 개발 환경에서 `true` 설정) |
+| `DB_DISABLE_SSL` | `false` | DB SSL 비활성화 여부 (asyncpg 전용. aiomysql은 기본이 평문 연결이라 무시됨) |

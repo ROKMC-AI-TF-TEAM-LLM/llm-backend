@@ -2,10 +2,11 @@ import enum
 import uuid
 from datetime import datetime, timezone
 
-from sqlalchemy import DateTime, Enum, ForeignKey, Text
+from sqlalchemy import Enum, ForeignKey, Text
+from sqlalchemy.dialects.mysql import MEDIUMTEXT
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from app.core.database import Base
+from app.core.database import Base, Timestamp
 
 
 class RoleEnum(str, enum.Enum):
@@ -23,9 +24,11 @@ class Message(Base):
         ForeignKey("sessions.session_id", ondelete="CASCADE"), nullable=False
     )
     role: Mapped[RoleEnum] = mapped_column(Enum(RoleEnum), nullable=False)
-    content: Mapped[str] = mapped_column(Text, nullable=False)
+    content: Mapped[str] = mapped_column(
+        Text().with_variant(MEDIUMTEXT(), "mysql"), nullable=False
+    )
     created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True),
+        Timestamp,
         default=lambda: datetime.now(timezone.utc),
         nullable=False,
     )

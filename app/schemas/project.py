@@ -9,6 +9,19 @@ class ProjectCreate(BaseModel):
     instructions: str | None = None
 
 
+class ProjectUpdate(BaseModel):
+    title: str
+
+
+class ProjectFavoriteUpdate(BaseModel):
+    is_favorite: bool
+
+
+class ProjectInstructionUpdate(BaseModel):
+    # null 또는 빈 문자열로 보내면 지침 삭제
+    instructions: str | None = None
+
+
 class ProjectResponse(BaseModel):
     project_id: uuid.UUID
     title: str

@@ -78,7 +78,7 @@ async def chat_stream(
             domain=body.domain, tool=body.tool,
         ),
         media_type="text/event-stream",
-    )
+    )   
 
 
 @router.delete(

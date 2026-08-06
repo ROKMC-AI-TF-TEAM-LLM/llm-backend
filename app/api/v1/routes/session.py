@@ -58,7 +58,8 @@ async def create_session(
         "- 첫 요청: cursor 없이 호출\n"
         "- 다음 페이지: 응답의 `next_cursor` 값을 cursor로 전달\n"
         "- `has_next`가 false이면 마지막 페이지\n"
-        "- `is_favorite=true`로 즐겨찾기한 세션만 조회 가능"
+        "- `is_favorite=true`로 즐겨찾기한 세션만 조회 가능\n"
+        "- `project_id`는 프로젝트 소속 대화면 해당 프로젝트 ID, 일반 대화면 null"
     ),
     responses={**R_401, **R_422},
 )

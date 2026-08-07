@@ -14,7 +14,6 @@ class DocumentItem(BaseModel):
     
 
 class UploaderItem(BaseModel):
-    """업로드한 사용자. 이름은 users 테이블에만 있으므로 조인으로 가져온다."""
     model_config = ConfigDict(from_attributes=True)
     name: str
 
@@ -30,8 +29,6 @@ class AdminDocumentItem(BaseModel):
     status: str | None = None
     created_at: datetime | None = None
     size: int | None = None
-    # 계정이 삭제되면 user_id가 NULL로 남는다(설계 결정: 문서는 유지, 출처는 포기).
-    # 스냅샷을 두지 않으므로 이 경우 업로더는 복구 불가능하며 null로 나간다.
     user: UploaderItem | None = None
 
     

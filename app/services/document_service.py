@@ -196,9 +196,6 @@ async def get_admin_documents(
     # 3. 실제 목록 — 같은 필터 + offset/limit
     list_query = (
         select(Document)
-        # 업로더 이름(users.name)을 함께 읽는다. N:1이라 LEFT OUTER JOIN 한 번으로 끝나고,
-        # eager load가 없으면 응답 직렬화 시점에 lazy load가 걸려 MissingGreenlet이 난다.
-        # 목록에 필요한 건 이름뿐이므로 password 같은 나머지 컬럼은 읽지 않는다.
         .options(joinedload(Document.user).load_only(User.name))
         .where(*filters)
         .order_by(Document.created_at.desc())

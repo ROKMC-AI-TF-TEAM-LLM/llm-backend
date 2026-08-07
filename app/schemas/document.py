@@ -13,9 +13,14 @@ class DocumentItem(BaseModel):
     applied_at: datetime | None = None
     
 
+class UploaderItem(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    name: str
+
+
 class AdminDocumentItem(BaseModel):
     model_config = ConfigDict(from_attributes=True)
-    document_id : UUID 
+    document_id : UUID
     name: str
     content_type: str | None = None # type이 없음, type은 MARS에서 주는거라서, 추후 content type을 잘 가공해서 파일 확장자만 남기기. 
     domain: str | None = None
@@ -24,6 +29,7 @@ class AdminDocumentItem(BaseModel):
     status: str | None = None
     created_at: datetime | None = None
     size: int | None = None
+    user: UploaderItem | None = None
 
     
 

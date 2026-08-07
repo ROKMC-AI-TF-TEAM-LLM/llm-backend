@@ -5,9 +5,10 @@ from app.core.exceptions import LLMServerError, FileTooLargeError, ConflictError
 from app.core.logger import get_logger
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select,func
-from sqlalchemy.orm import undefer
+from sqlalchemy.orm import undefer, joinedload, load_only
 from urllib.parse import quote
 from app.models.document import Document
+from app.models.user import User
 from app.schemas.document import DocumentDeleteResponse
 import uuid
 
@@ -195,6 +196,7 @@ async def get_admin_documents(
     # 3. 실제 목록 — 같은 필터 + offset/limit
     list_query = (
         select(Document)
+        .options(joinedload(Document.user).load_only(User.name))
         .where(*filters)
         .order_by(Document.created_at.desc())
         .offset(offset)

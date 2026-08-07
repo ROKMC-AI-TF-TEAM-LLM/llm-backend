@@ -5,9 +5,10 @@ from app.core.exceptions import LLMServerError, FileTooLargeError, ConflictError
 from app.core.logger import get_logger
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select,func
-from sqlalchemy.orm import undefer
+from sqlalchemy.orm import undefer, joinedload, load_only
 from urllib.parse import quote
 from app.models.document import Document
+from app.models.user import User
 from app.schemas.document import DocumentDeleteResponse
 import uuid
 
@@ -195,6 +196,10 @@ async def get_admin_documents(
     # 3. 실제 목록 — 같은 필터 + offset/limit
     list_query = (
         select(Document)
+        # 업로더 이름(users.name)을 함께 읽는다. N:1이라 LEFT OUTER JOIN 한 번으로 끝나고,
+        # eager load가 없으면 응답 직렬화 시점에 lazy load가 걸려 MissingGreenlet이 난다.
+        # 목록에 필요한 건 이름뿐이므로 password 같은 나머지 컬럼은 읽지 않는다.
+        .options(joinedload(Document.user).load_only(User.name))
         .where(*filters)
         .order_by(Document.created_at.desc())
         .offset(offset)

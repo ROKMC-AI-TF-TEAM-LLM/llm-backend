@@ -38,6 +38,9 @@ class MessageResponse(BaseModel):
     content: str
     created_at: datetime
     domain: str | None = None
+    # AI 서버가 붙인 경고 코드. null이면 경고 없음.
+    # 클라이언트는 code로 표시 방식을 고른다 (문구 파싱 금지)
+    notice_code: str | None = None
     sources: list[SourceResponse] = []
     attachments: list[AttachmentResponse] = []
 

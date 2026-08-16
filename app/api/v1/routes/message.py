@@ -25,7 +25,13 @@ router = APIRouter(prefix="/sessions", tags=["messages"])
         "- 첫 요청: cursor 없이 호출 (최신 메시지부터)\n"
         "- 다음 페이지(과거 메시지): 응답의 `next_cursor` 값을 cursor로 전달\n"
         "- `has_next`가 false이면 더 이상 과거 메시지 없음\n"
-        "AI 응답 메시지에는 출처(sources) 정보가 포함됩니다."
+        "AI 응답 메시지에는 출처(sources) 정보가 포함됩니다.\n\n"
+        "**`notice_code`** — 스트리밍 중 받은 `notice` 이벤트의 `code`가 그대로 담깁니다 "
+        "(경고가 없었으면 `null`). 현재 값은 `ungrounded_knowledge` 하나로, 내부 문서에서 "
+        "근거를 찾지 못해 AI의 일반 지식으로 작성한 답변이라는 뜻입니다. **재조회 시에도 "
+        "실시간과 동일하게 경고를 표시**하기 위한 필드이므로, 값이 있으면 일반 답변과 "
+        "구분되게 렌더링하세요. 이런 답변은 `sources`가 비어 있는 것이 정상입니다 "
+        "(출처 0건을 오류로 표시하지 마세요). 문구는 `code`로 고르고 파싱하지 마세요."
     ),
     responses={**R_401, **R_403_SESSION, **R_404_SESSION},
 )

@@ -129,8 +129,15 @@ async def _save_ai_message(
     sources: list[dict],
     attachments: list[Attachment] | None = None,
     domain: str | None = None,
+    notice_code: str | None = None,
 ) -> None:
-    ai_message = Message(session_id=session_id, role=RoleEnum.ai, content=answer, domain=domain)
+    ai_message = Message(
+        session_id=session_id,
+        role=RoleEnum.ai,
+        content=answer,
+        domain=domain,
+        notice_code=notice_code,
+    )
     db.add(ai_message)
     await db.flush()
 
@@ -148,8 +155,8 @@ async def _save_ai_message(
     session.updated_at = datetime.now(timezone.utc)
     await db.commit()
     logger.info(
-        "AI 메시지 저장 완료 length=%d, sources=%d, attachments=%d",
-        len(answer), len(sources), len(attachments or []),
+        "AI 메시지 저장 완료 length=%d, sources=%d, attachments=%d, notice=%s",
+        len(answer), len(sources), len(attachments or []), notice_code or "-",
     )
 
 
@@ -254,6 +261,7 @@ async def regenerate_stream(
     accumulated: list[str] = []
     pending_sources: list[dict] = []
     pending_file_names: list[str] = []
+    pending_notice_code: str | None = None
 
     # 프로젝트 소속 대화면 그 프로젝트의 참고 파일까지 검색 범위에 넣는다.
     # 값을 요청 body가 아닌 **세션 행에서 읽는 것이 핵심**이다 — _verify_session이
@@ -275,7 +283,10 @@ async def regenerate_stream(
                 yield f"data: {json.dumps({'type': 'error', 'message': 'LLM이 빈 응답을 반환했습니다.'})}\n\n"
                 return
             answer, attachments, file_items = await _collect_attachments(answer, pending_file_names)
-            await _save_ai_message(db, session, session_id, answer, pending_sources, attachments, domain)
+            await _save_ai_message(
+                db, session, session_id, answer, pending_sources, attachments, domain,
+                notice_code=pending_notice_code,
+            )
             if file_items:
                 yield f"data: {json.dumps({'type': 'files', 'items': file_items}, ensure_ascii=False)}\n\n"
             yield f"data: {raw}\n\n"
@@ -289,6 +300,15 @@ async def regenerate_stream(
         if event_type == "sources":
             pending_sources = event.get("items", [])
             logger.debug("출처 이벤트 수신 session_id=%s count=%d", session_id, len(pending_sources))
+            yield f"data: {raw}\n\n"
+            continue
+
+        if event_type == "notice":
+            # 답변에 대한 경고(예: 문서 근거 없이 AI 지식으로 답한 경우).
+            # code만 담는다 — 문구는 AI 서버가 code로 고르라고 명시한 계약이다.
+            # 프론트에는 원본을 그대로 흘려 실시간 표시를 막지 않는다
+            pending_notice_code = event.get("code")
+            logger.info("경고 이벤트 수신 session_id=%s code=%s", session_id, pending_notice_code)
             yield f"data: {raw}\n\n"
             continue
 
@@ -341,6 +361,7 @@ async def chat_stream(
     accumulated: list[str] = []
     pending_sources: list[dict] = []
     pending_file_names: list[str] = []
+    pending_notice_code: str | None = None
 
     # 프로젝트 소속 대화면 그 프로젝트의 참고 파일까지 검색 범위에 넣는다.
     # 값을 요청 body가 아닌 **세션 행에서 읽는 것이 핵심**이다 — _verify_session이
@@ -362,7 +383,10 @@ async def chat_stream(
                 yield f"data: {json.dumps({'type': 'error', 'message': 'LLM이 빈 응답을 반환했습니다.'})}\n\n"
                 return
             answer, attachments, file_items = await _collect_attachments(answer, pending_file_names)
-            await _save_ai_message(db, session, session_id, answer, pending_sources, attachments, domain)
+            await _save_ai_message(
+                db, session, session_id, answer, pending_sources, attachments, domain,
+                notice_code=pending_notice_code,
+            )
             if file_items:
                 yield f"data: {json.dumps({'type': 'files', 'items': file_items}, ensure_ascii=False)}\n\n"
             yield f"data: {raw}\n\n"
@@ -376,6 +400,15 @@ async def chat_stream(
         if event_type == "sources":
             pending_sources = event.get("items", [])
             logger.debug("출처 이벤트 수신 session_id=%s count=%d", session_id, len(pending_sources))
+            yield f"data: {raw}\n\n"
+            continue
+
+        if event_type == "notice":
+            # 답변에 대한 경고(예: 문서 근거 없이 AI 지식으로 답한 경우).
+            # code만 담는다 — 문구는 AI 서버가 code로 고르라고 명시한 계약이다.
+            # 프론트에는 원본을 그대로 흘려 실시간 표시를 막지 않는다
+            pending_notice_code = event.get("code")
+            logger.info("경고 이벤트 수신 session_id=%s code=%s", session_id, pending_notice_code)
             yield f"data: {raw}\n\n"
             continue
 

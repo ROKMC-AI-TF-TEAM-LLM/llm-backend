@@ -25,6 +25,11 @@ class Message(Base):
     )
     role: Mapped[RoleEnum] = mapped_column(Enum(RoleEnum), nullable=False)
     domain: Mapped[str] = mapped_column(String(50), nullable=True)
+    # AI 서버가 답변에 붙인 경고 코드 (SSE notice 이벤트의 code). NULL이면 경고 없음.
+    # 경고는 스트리밍 중에만 흐르므로 저장하지 않으면 세션 재진입 시 사라진다 —
+    # 검증(verify)을 거치지 않은 답변이 평범한 답변으로 보이게 되어 저장한다.
+    # 문구가 아니라 code만 남긴다: 문구는 AI 서버 소유 상수라 바뀌면 과거 행만 낡는다
+    notice_code: Mapped[str | None] = mapped_column(String(50), nullable=True)
     content: Mapped[str] = mapped_column(
         Text().with_variant(MEDIUMTEXT(), "mysql"), nullable=False
     )

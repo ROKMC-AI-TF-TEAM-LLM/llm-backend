@@ -113,6 +113,17 @@ R_404_DOCUMENT = {
     )
 }
 
+R_400_DOCUMENT = {
+    400: _resp(
+        "적재 요청 거부 (AI 서버 검증 실패)",
+        bad_request=_ex(
+            400,
+            "BAD_REQUEST",
+            "지원하지 않는 형식: report.exe (지원: .md, .txt, .pdf)",
+        ),
+    )
+}
+
 R_400_MESSAGE_ROLE = {
     400: _resp(
         "잘못된 메시지 역할",
@@ -133,6 +144,14 @@ R_422 = {
     422: _resp(
         "요청 유효성 오류",
         validation_error=_ex(422, "VALIDATION_ERROR", "요청 파라미터 유효성 검사 실패"),
+    )
+}
+
+# 413
+R_413_DOCUMENT = {
+    413: _resp(
+        "파일 용량 초과",
+        file_too_large=_ex(413, "FILE_TOO_LARGE", "업로드할 파일 용량이 50MB를 초과하였습니다."),
     )
 }
 

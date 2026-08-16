@@ -1,12 +1,21 @@
 import uuid
 from datetime import datetime
 
-from fastapi import APIRouter, Depends, Query, status
+from fastapi import APIRouter, Depends, File, Query, UploadFile, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
 from app.core.deps import get_current_user
-from app.core.responses import R_401, R_403_PROJECT, R_404_PROJECT, R_422
+from app.core.responses import (
+    R_400_DOCUMENT,
+    R_401,
+    R_403_PROJECT,
+    R_404_DOCUMENT,
+    R_404_PROJECT,
+    R_413_DOCUMENT,
+    R_422,
+    R_502_LLM,
+)
 from app.models.user import User
 from app.schemas.common import ApiResponse
 from app.schemas.project import (
@@ -17,6 +26,12 @@ from app.schemas.project import (
     ProjectPageResponse,
     ProjectResponse,
     ProjectUpdate,
+)
+from app.schemas.document import DocumentStatusResponse
+from app.schemas.project_document import (
+    ProjectDocumentItem,
+    ProjectDocumentListResponse,
+    ProjectDocumentUploadResponse,
 )
 from app.schemas.session import SessionPageResponse, SessionResponse
 from app.services import project_service, session_service
@@ -180,3 +195,126 @@ async def get_project_sessions(
         next_cursor=next_cursor,
         has_next=has_next,
     ), status_code=200)
+
+
+@router.post(
+    "/{project_id}/documents",
+    response_model=ApiResponse[ProjectDocumentUploadResponse],
+    status_code=status.HTTP_202_ACCEPTED,
+    summary="프로젝트 참고 파일 업로드",
+    description=(
+        "프로젝트에 참고 파일을 업로드합니다. 본인의 프로젝트에만 업로드 가능합니다.\n\n"
+        "- 지원 형식: `.md` / `.txt` / `.pdf` (최대 50MB). 형식·용량 위반은 400/413\n"
+        "- 업로드한 파일은 **해당 프로젝트 대화에서만** 검색됩니다\n"
+        "- 색인은 비동기로 진행되므로 즉시 202를 반환합니다. 진행 상태는 "
+        "파일 목록의 `status`(`queued` → `running` → `done` | `error`)로 확인합니다"
+    ),
+    responses={
+        **R_400_DOCUMENT,
+        **R_401,
+        **R_403_PROJECT,
+        **R_404_PROJECT,
+        **R_413_DOCUMENT,
+        **R_422,
+        **R_502_LLM,
+    },
+)
+async def upload_project_document(
+    project_id: uuid.UUID,
+    file: UploadFile = File(..., description="업로드할 참고 파일 (.md/.txt/.pdf)"),
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    data = await file.read()
+    doc = await project_service.upload_project_document(
+        db,
+        project_id,
+        current_user.user_id,
+        filename=file.filename or "",
+        content_type=file.content_type or "application/octet-stream",
+        data=data,
+    )
+    return ApiResponse.ok(
+        ProjectDocumentUploadResponse.model_validate(doc), status_code=202
+    )
+
+
+@router.get(
+    "/{project_id}/documents",
+    response_model=ApiResponse[ProjectDocumentListResponse],
+    summary="프로젝트 참고 파일 목록",
+    description=(
+        "프로젝트에 업로드된 참고 파일 목록을 최근 업로드순으로 조회합니다. "
+        "본인의 프로젝트만 조회 가능합니다.\n\n"
+        "- offset 기반 페이지네이션 (`has_more`가 false이면 마지막 페이지)\n"
+        "- `status`: `queued`(대기) | `running`(색인 중) | `done`(완료) | `error`(실패)\n"
+        "- 색인 진행 상태는 이 API를 폴링해 확인합니다 (별도 상태 조회 API 없음)"
+    ),
+    responses={**R_401, **R_403_PROJECT, **R_404_PROJECT, **R_422},
+)
+async def get_project_documents(
+    project_id: uuid.UUID,
+    offset: int = Query(0, ge=0, description="조회 시작 위치"),
+    limit: int = Query(50, ge=1, le=100, description="한 번에 가져올 파일 수"),
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    documents, total, has_more = await project_service.get_project_documents(
+        db, project_id, current_user.user_id, offset=offset, limit=limit
+    )
+    return ApiResponse.ok(ProjectDocumentListResponse(
+        documents=[ProjectDocumentItem.model_validate(d) for d in documents],
+        total=total,
+        offset=offset,
+        limit=limit,
+        has_more=has_more,
+    ), status_code=200)
+
+
+@router.get(
+    "/{project_id}/documents/{document_id}/status",
+    response_model=ApiResponse[DocumentStatusResponse],
+    summary="참고 파일 색인 상태 조회",
+    description=(
+        "참고 파일의 색인 진행 상태를 조회합니다. 업로드 후 이 API를 polling해 완료를 확인합니다.\n\n"
+        "- `status`: `queued`(대기) → `running`(색인 중) → `done`(완료) | `error`(실패)\n"
+        "- `done`이면 `chunks_indexed`에 적재된 청크 수가, `error`면 `error`에 사유가 담깁니다\n"
+        "- **권장 주기 10~15초.** 색인은 문서당 수 분 걸리므로 더 짧게 부를 이유가 없습니다\n"
+        "- `done`/`error`가 되면 polling을 중단하세요 (이후에는 AI 서버를 호출하지 않고 "
+        "저장된 값을 그대로 반환합니다)"
+    ),
+    responses={**R_401, **R_403_PROJECT, **R_404_PROJECT, **R_404_DOCUMENT, **R_422, **R_502_LLM},
+)
+async def get_project_document_status(
+    project_id: uuid.UUID,
+    document_id: uuid.UUID,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    doc = await project_service.get_project_document_status(
+        db, project_id, document_id, current_user.user_id
+    )
+    return ApiResponse.ok(DocumentStatusResponse.model_validate(doc), status_code=200)
+
+
+@router.delete(
+    "/{project_id}/documents/{document_id}",
+    response_model=ApiResponse[None],
+    summary="프로젝트 참고 파일 삭제",
+    description=(
+        "프로젝트 참고 파일을 삭제합니다. 본인의 프로젝트 파일만 삭제 가능합니다.\n\n"
+        "- 색인된 파일은 AI 서버의 청크를 먼저 정리한 뒤 원본을 삭제합니다\n"
+        "- 다른 프로젝트의 파일 ID를 지정하면 404를 반환합니다"
+    ),
+    responses={**R_401, **R_403_PROJECT, **R_404_PROJECT, **R_404_DOCUMENT, **R_422, **R_502_LLM},
+)
+async def delete_project_document(
+    project_id: uuid.UUID,
+    document_id: uuid.UUID,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    await project_service.delete_project_document(
+        db, project_id, document_id, current_user.user_id
+    )
+    return ApiResponse.ok(status_code=200)

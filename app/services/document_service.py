@@ -1,7 +1,7 @@
 import httpx
 
 from app.core.config import settings
-from app.core.exceptions import LLMServerError, FileTooLargeError, ConflictError, DocumentNotFoundError, NotFoundError
+from app.core.exceptions import LLMServerError, FileTooLargeError, ConflictError, DocumentNotFoundError, NotFoundError, BadRequestError
 from app.core.logger import get_logger
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select,func
@@ -21,11 +21,17 @@ async def relay_document(
         visibility: str,
         data: bytes,
         department: str | None = None,
+        project_id: str | None = None,
     ) -> dict:
     url = f"{settings.llm_server_url}/documents"
     params: dict[str, str] = {"name": name, "domain": domain, "visibility": visibility}
     if department:
         params["department"] = department  # visibility=DEPT_ONLY일 때 조건부 필수
+    if project_id:
+        # 지정하면 그 프로젝트 채팅에서만 검색되는 문서로 적재된다. 없으면 전사 공용.
+        # 형식(영숫자·_·-, 64자)이 틀리면 MARS가 400으로 거부한다 — 조용히 빈 값으로
+        # 처리하면 프로젝트 전용 문서가 전사 공용으로 영구히 남기 때문이다
+        params["project_id"] = project_id
     try:
         async with httpx.AsyncClient(timeout=settings.request_timeout) as client:
             response = await client.post(
@@ -41,6 +47,18 @@ async def relay_document(
         if status == 413:
             logger.error("문서 용량 초과 name=%s", name)
             raise FileTooLargeError(detail=f"업로드 파일 용량 50MB 초과 (파일이름: {name})")
+        if status == 400:
+            # 파라미터 오류(형식·도메인·빈 본문). 사용자가 고칠 수 있는 정보라 문구를 그대로 전달한다.
+            # detail은 문자열이 아닐 수 있고(FastAPI 422는 리스트), 응답이 JSON이 아닐 수도 있다
+            try:
+                detail = e.response.json().get("detail")
+            except Exception:
+                detail = None
+            if not isinstance(detail, str) or not detail:
+                detail = "적재 요청이 거부되었습니다."
+            logger.error("문서 적재 파라미터 오류 name=%s detail=%s", name, detail)
+            raise BadRequestError(detail=detail)
+
         logger.error("문서 relay 실패 status=%d name=%s", status, name)
         raise LLMServerError(detail=f"LLM서버 적재 요청 실패: HTTP {status}")
     except Exception:

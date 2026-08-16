@@ -97,8 +97,23 @@ def _parse_event(raw: str) -> dict | None:
         return None
 
 
-async def _verify_session(db: AsyncSession, session_id: uuid.UUID, user_id: uuid.UUID) -> Session:
-    session = await db.scalar(select(Session).where(Session.session_id == session_id))
+async def _verify_session(
+    db: AsyncSession,
+    session_id: uuid.UUID,
+    user_id: uuid.UUID,
+    *,
+    load_project: bool = False,
+) -> Session:
+    """세션 소유권을 확인하고 반환한다.
+
+    load_project=True면 소속 프로젝트를 함께 로드한다. 지연 로딩은 async에서
+    터지므로(MissingGreenlet) 프로젝트 값을 쓸 경로는 반드시 이 옵션을 켤 것.
+    목록·삭제처럼 프로젝트가 필요 없는 경로까지 join하지 않으려고 기본값은 False다.
+    """
+    query = select(Session).where(Session.session_id == session_id)
+    if load_project:
+        query = query.options(selectinload(Session.project))
+    session = await db.scalar(query)
     if not session:
         logger.warning("세션 없음 session_id=%s", session_id)
         raise SessionNotFoundError()
@@ -106,6 +121,21 @@ async def _verify_session(db: AsyncSession, session_id: uuid.UUID, user_id: uuid
         logger.warning("세션 접근 권한 없음 session_id=%s user_id=%s", session_id, user_id)
         raise SessionAccessDeniedError()
     return session
+
+
+def _project_context(session: Session) -> tuple[str | None, str | None]:
+    """세션이 속한 프로젝트의 (검색 범위, 지침)을 꺼낸다. 일반 대화면 (None, None).
+
+    두 값 모두 요청 body가 아닌 **세션 행에서 읽는 것이 핵심**이다 — _verify_session이
+    세션 소유권을 이미 확인했으므로 이 값은 정의상 이 사용자의 프로젝트다.
+    AI 서버는 project_id를 검증 없이 신뢰하므로(멤버십 검증은 미들웨어 책임),
+    클라이언트가 값을 주입할 수 있으면 남의 프로젝트 문서가 읽히고 남의 지침이
+    적용된다. 주입 표면 자체를 두지 않는다.
+    """
+    if not session.project_id:
+        return None, None
+    project = session.project
+    return str(session.project_id), (project.instructions if project else None)
 
 
 async def _save_question(
@@ -217,7 +247,7 @@ async def regenerate_stream(
     tool: str | None = None,
 ) -> AsyncGenerator[str, None]:
     try:
-        session = await _verify_session(db, session_id, user_id)
+        session = await _verify_session(db, session_id, user_id, load_project=True)
 
         result = await db.scalars(
             select(Message)
@@ -263,15 +293,15 @@ async def regenerate_stream(
     pending_file_names: list[str] = []
     pending_notice_code: str | None = None
 
-    # 프로젝트 소속 대화면 그 프로젝트의 참고 파일까지 검색 범위에 넣는다.
-    # 값을 요청 body가 아닌 **세션 행에서 읽는 것이 핵심**이다 — _verify_session이
-    # 세션 소유권을 이미 확인했으므로 이 값은 정의상 이 사용자의 프로젝트다.
-    # AI 서버는 project_id를 검증 없이 신뢰하므로, 클라이언트가 값을 주입할 수 있으면
-    # 남의 프로젝트 문서가 읽힌다. 주입 표면 자체를 두지 않는다
-    project_id = str(session.project_id) if session.project_id else None
+    project_id, project_instructions = _project_context(session)
 
     async for raw in llm_client.stream_chat(
-        question, llm_messages, domain=domain, tool=tool, project_id=project_id
+        question,
+        llm_messages,
+        domain=domain,
+        tool=tool,
+        project_id=project_id,
+        project_instructions=project_instructions,
     ):
         event = _parse_event(raw)
         event_type = event.get("type") if event else None
@@ -304,9 +334,6 @@ async def regenerate_stream(
             continue
 
         if event_type == "notice":
-            # 답변에 대한 경고(예: 문서 근거 없이 AI 지식으로 답한 경우).
-            # code만 담는다 — 문구는 AI 서버가 code로 고르라고 명시한 계약이다.
-            # 프론트에는 원본을 그대로 흘려 실시간 표시를 막지 않는다
             pending_notice_code = event.get("code")
             logger.info("경고 이벤트 수신 session_id=%s code=%s", session_id, pending_notice_code)
             yield f"data: {raw}\n\n"
@@ -363,15 +390,15 @@ async def chat_stream(
     pending_file_names: list[str] = []
     pending_notice_code: str | None = None
 
-    # 프로젝트 소속 대화면 그 프로젝트의 참고 파일까지 검색 범위에 넣는다.
-    # 값을 요청 body가 아닌 **세션 행에서 읽는 것이 핵심**이다 — _verify_session이
-    # 세션 소유권을 이미 확인했으므로 이 값은 정의상 이 사용자의 프로젝트다.
-    # AI 서버는 project_id를 검증 없이 신뢰하므로, 클라이언트가 값을 주입할 수 있으면
-    # 남의 프로젝트 문서가 읽힌다. 주입 표면 자체를 두지 않는다
-    project_id = str(session.project_id) if session.project_id else None
+    project_id, project_instructions = _project_context(session)
 
     async for raw in llm_client.stream_chat(
-        question, llm_messages, domain=domain, tool=tool, project_id=project_id
+        question,
+        llm_messages,
+        domain=domain,
+        tool=tool,
+        project_id=project_id,
+        project_instructions=project_instructions,
     ):
         event = _parse_event(raw)
         event_type = event.get("type") if event else None
@@ -404,9 +431,6 @@ async def chat_stream(
             continue
 
         if event_type == "notice":
-            # 답변에 대한 경고(예: 문서 근거 없이 AI 지식으로 답한 경우).
-            # code만 담는다 — 문구는 AI 서버가 code로 고르라고 명시한 계약이다.
-            # 프론트에는 원본을 그대로 흘려 실시간 표시를 막지 않는다
             pending_notice_code = event.get("code")
             logger.info("경고 이벤트 수신 session_id=%s code=%s", session_id, pending_notice_code)
             yield f"data: {raw}\n\n"

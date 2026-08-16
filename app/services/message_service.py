@@ -255,7 +255,16 @@ async def regenerate_stream(
     pending_sources: list[dict] = []
     pending_file_names: list[str] = []
 
-    async for raw in llm_client.stream_chat(question, llm_messages, domain=domain, tool=tool):
+    # 프로젝트 소속 대화면 그 프로젝트의 참고 파일까지 검색 범위에 넣는다.
+    # 값을 요청 body가 아닌 **세션 행에서 읽는 것이 핵심**이다 — _verify_session이
+    # 세션 소유권을 이미 확인했으므로 이 값은 정의상 이 사용자의 프로젝트다.
+    # AI 서버는 project_id를 검증 없이 신뢰하므로, 클라이언트가 값을 주입할 수 있으면
+    # 남의 프로젝트 문서가 읽힌다. 주입 표면 자체를 두지 않는다
+    project_id = str(session.project_id) if session.project_id else None
+
+    async for raw in llm_client.stream_chat(
+        question, llm_messages, domain=domain, tool=tool, project_id=project_id
+    ):
         event = _parse_event(raw)
         event_type = event.get("type") if event else None
 
@@ -333,7 +342,16 @@ async def chat_stream(
     pending_sources: list[dict] = []
     pending_file_names: list[str] = []
 
-    async for raw in llm_client.stream_chat(question, llm_messages, domain=domain, tool=tool):
+    # 프로젝트 소속 대화면 그 프로젝트의 참고 파일까지 검색 범위에 넣는다.
+    # 값을 요청 body가 아닌 **세션 행에서 읽는 것이 핵심**이다 — _verify_session이
+    # 세션 소유권을 이미 확인했으므로 이 값은 정의상 이 사용자의 프로젝트다.
+    # AI 서버는 project_id를 검증 없이 신뢰하므로, 클라이언트가 값을 주입할 수 있으면
+    # 남의 프로젝트 문서가 읽힌다. 주입 표면 자체를 두지 않는다
+    project_id = str(session.project_id) if session.project_id else None
+
+    async for raw in llm_client.stream_chat(
+        question, llm_messages, domain=domain, tool=tool, project_id=project_id
+    ):
         event = _parse_event(raw)
         event_type = event.get("type") if event else None
 

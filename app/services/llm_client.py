@@ -28,6 +28,7 @@ async def stream_chat(
     messages: list[dict],
     domain: str | None = None,
     tool: str | None = None,
+    project_id: str | None = None,
 ) -> AsyncGenerator[str, None]:
     payload: dict = {"question": question, "messages": messages}
     # 빈 값은 AI 서버 기본값("" = 자동)과 동일하므로 보내지 않는다
@@ -35,6 +36,10 @@ async def stream_chat(
         payload["domain"] = domain
     if tool:
         payload["tool"] = tool
+    # 값이 있으면 전사 문서 + 그 프로젝트 문서를 검색하고, 없으면 전사 문서만 검색된다.
+    # AI 서버는 이 값을 검증 없이 신뢰하므로 호출자가 반드시 소유가 확인된 값만 넘겨야 한다
+    if project_id:
+        payload["project_id"] = project_id
 
     timeout = httpx.Timeout(connect=settings.request_timeout, read=None, write=None, pool=None)
     async with httpx.AsyncClient(timeout=timeout) as client:

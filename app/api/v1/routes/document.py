@@ -24,7 +24,9 @@ router = APIRouter(prefix="/documents", tags=["documents"])
         "- 첫 요청: `offset=0`으로 시작\n"
         "- 다음 페이지: `offset += limit`으로 증가\n"
         "- 응답의 `has_more`가 false이면 마지막 페이지\n"
-        "- `domain`으로 도메인 필터링 가능 (예: `MANUAL`). 사용 가능 값은 `GET /capabilities` 참조"
+        "- `domain`으로 도메인 필터링 가능 (예: `MANUAL`). 사용 가능 값은 `GET /capabilities` 참조\n"
+        "- **전사 공용 문서만** 반환합니다. 프로젝트 참고 파일은 "
+        "`GET /projects/{project_id}/documents`로 조회하세요"
     ),
     responses={**R_401, **R_502_LLM},
 )
@@ -34,7 +36,12 @@ async def get_documents(
     domain: str | None = Query(None, description="도메인 필터 (예: HR, MANUAL)"),
     _: User = Depends(get_current_user),
 ):
-    data = await document_service.get_documents(offset=offset, limit=limit, domain=domain)
+    # 로그인만 하면 누구나 부를 수 있는 목록이라 전사 공용으로 범위를 고정한다.
+    # ""은 AI 서버에서 "프로젝트에 속하지 않은 문서만"이라는 뜻이며, 생략하면 전부
+    # 반환되어 **다른 사용자의 개인 파일명·용량이 그대로 노출된다** (I-09와 같은 부류)
+    data = await document_service.get_documents(
+        offset=offset, limit=limit, domain=domain, project_id=""
+    )
     return ApiResponse.ok(data, status_code=200)
 
 

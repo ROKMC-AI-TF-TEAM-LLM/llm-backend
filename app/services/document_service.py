@@ -20,19 +20,19 @@ async def relay_document(
         domain: str,
         visibility: str,
         data: bytes,
-        department: str | None = None
+        department: str | None = None,
     ) -> dict:
     url = f"{settings.llm_server_url}/documents"
     params: dict[str, str] = {"name": name, "domain": domain, "visibility": visibility}
     if department:
-        params["department"] = department #department는 조건부 필수라
+        params["department"] = department  # visibility=DEPT_ONLY일 때 조건부 필수
     try:
         async with httpx.AsyncClient(timeout=settings.request_timeout) as client:
             response = await client.post(
                 url,
                 params=params,
                 content=data,
-                headers={"Content-Type": "application/octet-stream"} #mulitpart 아님 
+                headers={"Content-Type": "application/octet-stream"},  # multipart 아님
             )
             response.raise_for_status()
             return response.json()
@@ -40,8 +40,7 @@ async def relay_document(
         status = e.response.status_code
         if status == 413:
             logger.error("문서 용량 초과 name=%s", name)
-            raise FileTooLargeError(detail=f"업로드 파일 용량 50MB 초과 (파일이름: {name})") #전용 예외 처리
-            
+            raise FileTooLargeError(detail=f"업로드 파일 용량 50MB 초과 (파일이름: {name})")
         logger.error("문서 relay 실패 status=%d name=%s", status, name)
         raise LLMServerError(detail=f"LLM서버 적재 요청 실패: HTTP {status}")
     except Exception:
@@ -61,7 +60,7 @@ async def get_job(job_id: str) -> dict | None:
         status = e.response.status_code
         if status == 404:
             logger.warning("job 이 없음 (LLM 서버 재시작 추정) job_id=%s",job_id)
-            return None #정보 없음을 None으로 알림.
+            return None  # 서버 재시작으로 이력이 사라진 경우 — 호출자가 DB 값을 유지한다
         logger.error("작업 조회 실패 status=%d job_id=%s", status, job_id)
         raise LLMServerError(detail=f"LLM 서버 오류: HTTP {status}")
     except Exception:
@@ -91,11 +90,20 @@ async def delete_document(name: str) -> dict:
         raise LLMServerError(detail="LLM 서버에 연결할 수 없습니다.")
 
 
-async def get_documents(offset: int, limit: int, domain: str | None = None) -> dict:
+async def get_documents(
+    offset: int,
+    limit: int,
+    domain: str | None = None,
+    project_id: str | None = None,
+) -> dict:
     url = f"{settings.llm_server_url}/documents"
     params: dict = {"offset": offset, "limit": limit}
     if domain:
         params["domain"] = domain
+    # ""(빈 문자열)은 "전사 공용만"이라는 의미가 있으므로 None과 구분해야 한다.
+    # `if project_id:`로 쓰면 빈 문자열이 걸러져 프로젝트 문서까지 함께 반환된다
+    if project_id is not None:
+        params["project_id"] = project_id
     try:
         async with httpx.AsyncClient(timeout=settings.request_timeout) as client:
             response = await client.get(url, params=params)
@@ -125,16 +133,14 @@ async def upload_document(
         visibility=visibility,
         data=data,
         content_type=content_type,
-        size=len(data),          # ← 빠졌던 필수 필드
+        size=len(data),
         department=department,
         user_id=user_id,
-        # status는 모델 default "pending" 사용
     )
     db.add(doc)
     await db.commit()
     await db.refresh(doc)
 
-    #LLM 서버로 relay
     try:
         relay_response = await relay_document(name=name, domain=domain, visibility=visibility, data=data, department=department)
     except Exception as e:
@@ -153,18 +159,18 @@ async def upload_document(
 
 
 async def get_document_status(db: AsyncSession, document_id: uuid.UUID) -> Document:
-    doc = await db.get(Document, document_id)      # 1. 조회 (없으면?)
+    doc = await db.get(Document, document_id)
     if doc is None:
         raise doc   # 기존 예외 재활용
 
     if doc.job_id is None:
         return doc                  # relay 전이거나 이미 끝난 상태 → DB 그대로
 
-    job = await get_job(doc.job_id)  # 2. MARS에 물어봄
+    job = await get_job(doc.job_id)
     if job is None:
-        return doc                  # 3. MARS가 모름(404) → DB 마지막 상태 그대로 (폴백!)
+        return doc  # MARS가 모름(404) → DB 마지막 상태 유지
 
-    # 4. MARS가 준 값을 번역 없이 그대로 저장
+    # MARS가 준 값을 번역 없이 그대로 저장한다 (새 상태가 추가돼도 깨지지 않도록)
     doc.status = job["status"]
     doc.chunks_indexed = job.get("chunks_indexed")
     doc.error = job.get("error")
@@ -181,18 +187,17 @@ async def get_admin_documents(
     domain: str | None = None,
     search: str | None = None,
 ) -> tuple[list[Document], int, bool]:
-    # 1. 필터 조건을 먼저 만든다 (재사용할 거니까)
-    filters = []
+    # [전사 문서 전용] 프로젝트 참고 파일은 사용자 개인 자료이므로 관리자 목록에서 제외한다.
+    # 섞이면 개인 파일이 관리자 화면에 노출되고, 관리자 삭제 대상이 된다. I-09 참조.
+    filters = [Document.project_id.is_(None)]
     if domain:
         filters.append(Document.domain == domain)
     if search:
         filters.append(Document.name.ilike(f"%{search}%"))
 
-    # 2. total — 같은 필터로 개수만 세기
     count_query = select(func.count()).select_from(Document).where(*filters)
     total = await db.scalar(count_query)
 
-    # 3. 실제 목록 — 같은 필터 + offset/limit
     list_query = (
         select(Document)
         .where(*filters)
@@ -203,7 +208,6 @@ async def get_admin_documents(
     result = await db.scalars(list_query)
     documents = list(result.all())
 
-    # 계산
     has_more = offset + len(documents) < total
 
     return documents, total, has_more
@@ -214,10 +218,14 @@ async def get_document_file(db: AsyncSession, name: str) -> Document:
     """원본 문서를 문서명으로 조회한다 (바이너리 포함).
 
     name은 unique 제약이 없으므로, 같은 이름이 여러 건이면 가장 최근 등록본을 반환한다.
+
+    [전사 문서 전용] project_id가 있는 프로젝트 참고 파일은 대상에서 제외한다.
+    이 조회에는 소유자 조건이 없어(문서명만으로 찾는다) 프로젝트 파일이 섞이면
+    다른 사용자가 파일명만으로 남의 개인 파일을 내려받을 수 있다. I-09 참조.
     """
     doc = await db.scalar(
         select(Document)
-        .where(Document.name == name)
+        .where(Document.name == name, Document.project_id.is_(None))
         .order_by(Document.created_at.desc())
         .limit(1)
         .options(undefer(Document.data))
@@ -228,12 +236,18 @@ async def get_document_file(db: AsyncSession, name: str) -> Document:
 
 
 async def delete_document_admin(db: AsyncSession, document_id: uuid.UUID) -> DocumentDeleteResponse:
-    # 1. id로 우리 DB에서 조회 (MARS는 name만 알아서 여기서 name을 꺼냄)
-    doc = await db.get(Document, document_id)
+    # MARS는 문서명으로 삭제하므로 여기서 name을 꺼낸다
+    # [전사 문서 전용] 프로젝트 참고 파일은 이 경로로 삭제할 수 없다 — 관리자 문서와
+    # 삭제 규칙이 다르고(프로젝트 스코프), 소유자 동의 없이 사라지면 안 된다. I-09 참조.
+    doc = await db.scalar(
+        select(Document).where(
+            Document.document_id == document_id,
+            Document.project_id.is_(None),
+        )
+    )
     if doc is None:
         raise DocumentNotFoundError()
 
-    # 2. MARS 먼저 삭제 (§7: MARS 먼저 → DB 나중)
     try:
         result = await delete_document(doc.name)
         deleted_chunks = result["deleted_chunks"]
@@ -241,9 +255,8 @@ async def delete_document_admin(db: AsyncSession, document_id: uuid.UUID) -> Doc
         # MARS에 이미 없음(색인 실패했거나 이미 지워짐) → 목표(MARS에 청크 없음)는 이미 달성 → 멱등 처리
         deleted_chunks = 0
     # ConflictError(409)나 LLMServerError는 여기서 안 잡음 → 그대로 위로 던져짐
-    # → DB는 안 지워짐(원본 유지, 재시도 가능) — 이것도 §7 원칙
+    # → DB는 안 지워짐(원본 유지, 재시도 가능) — ADR-17
 
-    # 3. MARS 삭제 성공(또는 멱등 확인) 후에만 DB 원본 삭제
     await db.delete(doc)
     await db.commit()
 

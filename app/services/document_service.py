@@ -217,7 +217,7 @@ async def get_document_status(db: AsyncSession, document_id: uuid.UUID) -> Docum
     (`ingest_jobs.py` `_prune`), **색인에 성공한 문서가 404가 되는 경우가 있다.**
     즉 이 처리는 성공을 실패로 오판할 수 있다. 오판해도 재적재는 멱등이라 데이터가
     깨지지는 않지만, 근본 해법은 404 시 `GET /documents?project_id=`로 실제 적재
-    여부를 확인하는 것이다 — docs/ingest_state_defects.md D6 참조.
+    여부를 확인하는 것이다 — my_docs/ingest_state_defects.md D6 참조.
     """
     doc = await db.get(Document, document_id)
     if doc is None:

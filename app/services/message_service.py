@@ -371,7 +371,7 @@ async def chat_stream(
     domain: str | None = None,
     tool: str | None = None,
 ) -> AsyncGenerator[str, None]:
-    session = await _verify_session(db, session_id, user_id)
+    session = await _verify_session(db, session_id, user_id, load_project=True)
     logger.info("스트리밍 시작 session_id=%s", session_id)
 
     history = await db.scalars(

@@ -166,6 +166,26 @@ async def update_instructions(
     return ApiResponse.ok(ProjectDetailResponse.model_validate(project), status_code=200)
 
 
+@router.delete(
+    "/{project_id}",
+    response_model=ApiResponse[None],
+    summary="프로젝트 삭제",
+    description=(
+        "프로젝트를 삭제합니다. 본인의 프로젝트만 삭제 가능합니다.\n\n"
+        "- 하위 **대화 세션·메시지·참고 파일이 함께 삭제**됩니다 (되돌릴 수 없습니다)\n"
+        "- 색인된 참고 파일은 AI 서버의 청크를 먼저 정리한 뒤 삭제합니다"
+    ),
+    responses={**R_401, **R_403_PROJECT, **R_404_PROJECT, **R_422, **R_502_LLM},
+)
+async def delete_project(
+    project_id: uuid.UUID,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    await project_service.delete_project(db, project_id, current_user.user_id)
+    return ApiResponse.ok(status_code=200)
+
+
 @router.get(
     "/{project_id}/sessions",
     response_model=ApiResponse[SessionPageResponse],

@@ -134,6 +134,36 @@ async def update_instructions(
 
 
 
+async def delete_project(db: AsyncSession, project_id: uuid.UUID, user_id: uuid.UUID) -> None:
+    """프로젝트 삭제 (7번). 하위 세션·메시지·참고 파일이 FK CASCADE로 함께 삭제된다.
+
+    **외부(MARS) 먼저 → DB 나중** 순서를 지킨다. 반대로 하면 DB 원본이 사라진 뒤
+    MARS 호출이 실패했을 때 청크만 남아 검색에 계속 잡히고 복구할 원본도 없다.
+
+    [실패 시 동작] MARS 정리가 실패하면 예외가 그대로 올라가 **DB는 손대지 않은
+    상태로 남는다.** 사용자에게는 502/409가 나가고 프로젝트는 그대로 보이므로,
+    다시 삭제를 누르면 재시도가 된다. MARS 쪽은 "이미 없으면 0건"으로 멱등하니
+    중복 삭제도 안전하다. 즉 별도 보상 트랜잭션 없이 **재시도가 곧 복구**다.
+    """
+    project = await _get_project_owned(db, project_id, user_id)
+
+    # 색인된 파일이 하나도 없으면 MARS에 지울 것이 없다 — 왕복을 건너뛴다
+    indexed = await db.scalar(
+        select(func.count())
+        .select_from(Document)
+        .where(Document.project_id == project_id, Document.job_id.is_not(None))
+    )
+    if indexed:
+        result = await document_service.delete_all_project_documents(str(project_id))
+        logger.info(
+            "프로젝트 문서 청크 정리 project_id=%s 문서=%d건 청크=%s",
+            project_id, indexed, result.get("deleted_chunks"),
+        )
+
+    await db.delete(project)
+    await db.commit()
+
+
 # ══════════════════════════════════════════════════════════════════════
 # 프로젝트 참고 파일 (9~11번)
 # ══════════════════════════════════════════════════════════════════════

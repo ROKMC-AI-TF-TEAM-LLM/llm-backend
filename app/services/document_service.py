@@ -108,6 +108,34 @@ async def delete_document(name: str) -> dict:
         raise LLMServerError(detail="LLM 서버에 연결할 수 없습니다.")
 
 
+async def delete_all_project_documents(project_id: str) -> dict:
+    """프로젝트에 적재된 문서를 한 번에 삭제한다 (전사 공용 문서는 건드리지 않는다).
+
+    동기 처리다 — 색인 재빌드 때문에 수 초~수십 초 걸릴 수 있다.
+    적재된 문서가 없으면(404) 목표가 이미 달성된 것으로 보고 0건을 반환한다.
+    """
+    url = f"{settings.llm_server_url}/projects/{quote(project_id)}"
+    try:
+        async with httpx.AsyncClient(timeout=settings.request_timeout) as client:
+            response = await client.delete(url)
+            response.raise_for_status()
+            return response.json()
+    except httpx.HTTPStatusError as e:
+        status = e.response.status_code
+        if status == 404:
+            # 해당 프로젝트에 적재된 문서 없음 → 멱등 처리
+            logger.warning("프로젝트에 적재된 문서 없음 project_id=%s", project_id)
+            return {"documents": [], "deleted_chunks": 0, "deleted_parents": 0}
+        if status == 409:
+            logger.error("다른 적재/삭제 작업 진행 중 project_id=%s", project_id)
+            raise ConflictError(detail="현재 다른 적재/삭제 작업이 진행 중 입니다.")
+        logger.error("프로젝트 문서 삭제 실패 status=%d project_id=%s", status, project_id)
+        raise LLMServerError(detail=f"LLM 서버 오류: HTTP {status}")
+    except Exception:
+        logger.error("LLM 서버 연결 오류 url=%s", url)
+        raise LLMServerError(detail="LLM 서버에 연결할 수 없습니다.")
+
+
 async def get_documents(
     offset: int,
     limit: int,

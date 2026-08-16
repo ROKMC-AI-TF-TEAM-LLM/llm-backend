@@ -269,6 +269,9 @@ async def get_project_document_status(
     관리자 문서와 같은 함수를 쓴다 — mirroring 규칙이 두 벌이 되면 정책이 갈린다.
 
     이미 끝난 파일(job_id 없음 또는 done/error)은 외부 호출 없이 DB 값을 돌려준다.
+
+    [임시방안] job 404는 색인 실패로 확정된다 (관리자 문서와 동일 정책).
+    상세와 오판 여지는 `document_service.get_document_status` docstring 참조.
     """
     await _get_project_owned(db, project_id, user_id)
 

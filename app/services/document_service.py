@@ -205,16 +205,39 @@ async def upload_document(
 
 
 async def get_document_status(db: AsyncSession, document_id: uuid.UUID) -> Document:
+    """MARS의 job 상태를 DB에 mirroring하고 최신 문서를 반환한다.
+
+    관리자 문서와 프로젝트 참고 파일이 같은 정책을 쓴다 — mirroring 규칙이
+    두 벌이 되면 정책이 갈린다.
+
+    [임시방안] job이 404면 색인 실패로 확정한다. 유지하면 status가 running에
+    고정돼 클라이언트가 영원히 폴링하고, 삭제·재시도 어느 쪽도 열리지 않기 때문이다.
+
+    ⚠ MARS의 job 이력은 재시작뿐 아니라 100건 상한 prune으로도 사라지므로
+    (`ingest_jobs.py` `_prune`), **색인에 성공한 문서가 404가 되는 경우가 있다.**
+    즉 이 처리는 성공을 실패로 오판할 수 있다. 오판해도 재적재는 멱등이라 데이터가
+    깨지지는 않지만, 근본 해법은 404 시 `GET /documents?project_id=`로 실제 적재
+    여부를 확인하는 것이다 — docs/ingest_state_defects.md D6 참조.
+    """
     doc = await db.get(Document, document_id)
     if doc is None:
-        raise doc   # 기존 예외 재활용
+        raise DocumentNotFoundError()
 
     if doc.job_id is None:
         return doc                  # relay 전이거나 이미 끝난 상태 → DB 그대로
 
     job = await get_job(doc.job_id)
     if job is None:
-        return doc  # MARS가 모름(404) → DB 마지막 상태 유지
+        # 이력이 사라진 job은 다시 진행될 수 없다. 종결 상태로 확정해 재시도/삭제를 연다
+        logger.warning(
+            "job 이력 유실 → 색인 실패로 확정 document_id=%s job_id=%s",
+            document_id, doc.job_id,
+        )
+        doc.status = "error"
+        doc.error = "색인 작업 이력이 유실되었습니다 (AI 서버 재시작 추정). 다시 시도해 주세요."
+        await db.commit()
+        await db.refresh(doc)
+        return doc
 
     # MARS가 준 값을 번역 없이 그대로 저장한다 (새 상태가 추가돼도 깨지지 않도록)
     doc.status = job["status"]

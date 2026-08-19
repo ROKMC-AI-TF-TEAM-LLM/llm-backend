@@ -379,7 +379,7 @@ async def chat_stream(
         .where(Message.session_id == session_id)
         .order_by(Message.created_at.asc())
     )
-    
+
     llm_messages = _to_llm_messages(list(history.all()))
     logger.info("이전 대화 이력 %d건 전송", len(llm_messages))
 

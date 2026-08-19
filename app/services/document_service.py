@@ -64,7 +64,7 @@ async def relay_document(
     except Exception:
         logger.error("LLM 서버 연결 오류 url=%s", url)
         raise LLMServerError(detail="LLM 서버에 연결할 수 없습니다.")
-    
+
 
 async def get_job(job_id: str) -> dict | None:
     url = f"{settings.llm_server_url}/documents/jobs/{job_id}"
@@ -84,7 +84,7 @@ async def get_job(job_id: str) -> dict | None:
     except Exception:
         logger.error("LLM 서버 연결 오류 url=%s", url)
         raise LLMServerError(detail="LLM 서버에 연결할 수 없습니다.")
-    
+
 
 async def delete_document(name: str, project_id: str) -> dict:
     url = f"{settings.llm_server_url}/documents/{quote(name)}"
@@ -161,7 +161,7 @@ async def get_documents(
     except Exception:
         logger.error("LLM 서버 연결 오류 url=%s", url)
         raise LLMServerError(detail="LLM 서버에 연결할 수 없습니다.")
-    
+
 
 async def upload_document(
         db: AsyncSession,

@@ -9,7 +9,7 @@ class ProjectDocumentItem(BaseModel):
     name: str
     content_type: str | None = None
     size: int
-    # 색인 상태: not_indexed(색인 대기) | queued | running | done | error
+    # 색인 상태: pending(적재 요청 전) | queued | running | done | error
     status: str
     created_at: datetime
 

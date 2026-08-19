@@ -54,7 +54,7 @@ class Document(Base):
         nullable=False,
     )
     #최근 갱신 시점 표시.
-    updated_at: Mapped[datetime] = mapped_column( 
+    updated_at: Mapped[datetime] = mapped_column(
         Timestamp,
         default=lambda: datetime.now(timezone.utc),
         onupdate=lambda: datetime.now(timezone.utc),  # 행 바뀔 때마다 자동 갱신

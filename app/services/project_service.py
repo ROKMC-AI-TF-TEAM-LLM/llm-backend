@@ -15,8 +15,10 @@ from datetime import datetime
 from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.config import settings
 from app.core.exceptions import (
     DocumentNotFoundError,
+    FileTooLargeError,
     ProjectAccessDeniedError,
     ProjectNotFoundError,
 )
@@ -133,7 +135,6 @@ async def update_instructions(
     return project
 
 
-
 async def delete_project(db: AsyncSession, project_id: uuid.UUID, user_id: uuid.UUID) -> None:
     """프로젝트 삭제 (7번). 하위 세션·메시지·참고 파일이 FK CASCADE로 함께 삭제된다.
 
@@ -179,14 +180,28 @@ async def upload_project_document(
 ) -> Document:
     """프로젝트에 참고 파일을 업로드한다 (9번).
 
-    형식·용량 검증은 MARS가 한다 — 여기서 같은 규칙을 다시 구현하면 두 곳이
-    어긋난다. MARS가 400/413을 주면 그 문구를 사용자에게 그대로 전달한다.
+    형식 검증은 MARS가 한다 — 여기서 같은 규칙을 다시 구현하면 두 곳이 어긋난다.
+    MARS가 400을 주면 그 문구를 사용자에게 그대로 전달한다.
 
     `domain`/`visibility`는 사용자가 정하지 않는다. 프로젝트 파일은 주제 분류가
     없고(GENERAL) 부서 ACL도 쓰지 않으므로(ALL), 검색 범위는 `project_id`가
     단독으로 결정한다.
+
+    다만 **용량만은 DB에 쓰기 전에 여기서 막는다.** 형식 검증과 달리 규칙이
+    갈릴 여지가 없고(바이트 수 비교), MARS에 맡기면 어차피 거부될 파일이
+    LONGBLOB으로 통째로 저장된 뒤에 버려진다. 로그인한 사용자면 누구나 부를 수
+    있는 경로라 그대로 두면 DB를 채우는 수단이 된다.
     """
     await _get_project_owned(db, project_id, user_id)
+
+    limit_bytes = settings.max_document_size_mb * 1024 * 1024
+    if len(data) > limit_bytes:
+        logger.warning(
+            "업로드 용량 초과 project_id=%s name=%s size=%d", project_id, filename, len(data)
+        )
+        raise FileTooLargeError(
+            detail=f"업로드 파일 용량 {settings.max_document_size_mb}MB 초과 (파일이름: {filename})"
+        )
 
     doc = Document(
         name=filename,
@@ -243,7 +258,7 @@ async def get_project_documents(
     # 안 보이는 쪽으로 실패하도록 쿼리에도 project_id 조건을 둔다
     scope = Document.project_id == project_id
 
-    total = await db.scalar(select(func.count()).select_from(Document).where(scope))
+    total = await db.scalar(select(func.count()).select_from(Document).where(scope)) or 0
     result = await db.scalars(
         select(Document)
         .where(scope)
@@ -253,7 +268,7 @@ async def get_project_documents(
     )
     documents = list(result.all())
     has_more = offset + len(documents) < total
-    return documents, total or 0, has_more
+    return documents, total, has_more
 
 
 async def get_project_document_status(
@@ -311,8 +326,8 @@ async def delete_project_document(
         )
     )
     if doc is None:
-        raise DocumentNotFoundError() 
-   
+        raise DocumentNotFoundError()
+
     # 적재를 요청한 적 있는 문서만 MARS를 건드린다 (실패해 job_id가 없으면 청크도 없다)
     if doc.job_id is not None:
         await document_service.delete_document(doc.name, doc.project_id)

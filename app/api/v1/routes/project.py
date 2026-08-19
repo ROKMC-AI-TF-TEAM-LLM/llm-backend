@@ -267,8 +267,11 @@ async def upload_project_document(
         "프로젝트에 업로드된 참고 파일 목록을 최근 업로드순으로 조회합니다. "
         "본인의 프로젝트만 조회 가능합니다.\n\n"
         "- offset 기반 페이지네이션 (`has_more`가 false이면 마지막 페이지)\n"
-        "- `status`: `queued`(대기) | `running`(색인 중) | `done`(완료) | `error`(실패)\n"
-        "- 색인 진행 상태는 이 API를 폴링해 확인합니다 (별도 상태 조회 API 없음)"
+        "- `status`: `pending`(적재 요청 전) | `queued`(대기) | `running`(색인 중) | "
+        "`done`(완료) | `error`(실패)\n"
+        "- **이 API의 `status`는 마지막으로 기록된 값**입니다. 진행 중인 파일의 최신 상태는 "
+        "`GET /projects/{project_id}/documents/{document_id}/status`로 확인하세요 "
+        "(목록은 AI 서버에 묻지 않으므로 폴링해도 값이 바뀌지 않습니다)"
     ),
     responses={**R_401, **R_403_PROJECT, **R_404_PROJECT, **R_422},
 )

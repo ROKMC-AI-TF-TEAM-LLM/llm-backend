@@ -312,11 +312,10 @@ async def delete_project_document(
     )
     if doc is None:
         raise DocumentNotFoundError() 
-    """Claude는 여기를 참고한다. 모종의 이유로 색인이 안된상태일 수 있는데, 그럴 경우, 사용자가 보는 화면에서 색인 안됨을 인지하고 재시도 or 미적재 결정을 할수 있게 설계 할 것이다. 따라서, 색인이 안된경우에도 삭제와 재시도가 되게끔 로직이 짜져야한다."""
-
+   
     # 적재를 요청한 적 있는 문서만 MARS를 건드린다 (실패해 job_id가 없으면 청크도 없다)
     if doc.job_id is not None:
-        await document_service.delete_document(doc.name)
+        await document_service.delete_document(doc.name, doc.project_id)
 
     await db.delete(doc)
     await db.commit()

@@ -86,11 +86,11 @@ async def get_job(job_id: str) -> dict | None:
         raise LLMServerError(detail="LLM 서버에 연결할 수 없습니다.")
     
 
-async def delete_document(name: str) -> dict:
+async def delete_document(name: str, project_id: str) -> dict:
     url = f"{settings.llm_server_url}/documents/{quote(name)}"
     try:
         async with httpx.AsyncClient(timeout=settings.request_timeout) as client:
-            response = await client.delete(url)
+            response = await client.delete(url, params={"project_id":project_id})
             response.raise_for_status()
             return response.json()
     except httpx.HTTPStatusError as e:
@@ -318,7 +318,7 @@ async def delete_document_admin(db: AsyncSession, document_id: uuid.UUID) -> Doc
         raise DocumentNotFoundError()
 
     try:
-        result = await delete_document(doc.name)
+        result = await delete_document(doc.name, doc.project_id)
         deleted_chunks = result["deleted_chunks"]
     except NotFoundError:
         # MARS에 이미 없음(색인 실패했거나 이미 지워짐) → 목표(MARS에 청크 없음)는 이미 달성 → 멱등 처리

@@ -25,6 +25,9 @@ class Message(Base):
     )
     role: Mapped[RoleEnum] = mapped_column(Enum(RoleEnum), nullable=False)
     domain: Mapped[str] = mapped_column(String(50), nullable=True)
+    # SSE notice 이벤트의 code (NULL이면 경고 없음). 저장하지 않으면 세션 재진입 시
+    # 경고가 사라져, 근거 검증을 거치지 않은 답변이 평범한 답변으로 보인다
+    notice_code: Mapped[str | None] = mapped_column(String(50), nullable=True)
     content: Mapped[str] = mapped_column(
         Text().with_variant(MEDIUMTEXT(), "mysql"), nullable=False
     )

@@ -7,10 +7,16 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.exceptions import SessionAccessDeniedError, SessionNotFoundError
 from app.models.session import Session
 from app.schemas.session import SessionCreate, SessionUpdate
+from app.services import project_service
 
 
 async def create_session(db: AsyncSession, user_id: uuid.UUID, data: SessionCreate) -> Session:
-    session = Session(user_id=user_id, title=data.title)
+    # 프로젝트 소속으로 만들 때는 그 프로젝트가 내 것인지 먼저 확인한다
+    # (검증이 없으면 남의 프로젝트에 내 대화를 꽂아 넣을 수 있다)
+    if data.project_id is not None:
+        await project_service.get_project(db, data.project_id, user_id)
+
+    session = Session(user_id=user_id, title=data.title, project_id=data.project_id)
     db.add(session)
     await db.commit()
     await db.refresh(session)
@@ -34,6 +40,31 @@ async def get_sessions(
         query = query.where(Session.updated_at < cursor)
     if is_favorite is not None:
         query = query.where(Session.is_favorite == is_favorite)
+
+    result = await db.scalars(query)
+    sessions = list(result.all())
+    has_next = len(sessions) > size
+    return sessions[:size], has_next
+
+
+async def get_project_sessions(
+    db: AsyncSession,
+    project_id: uuid.UUID,
+    user_id: uuid.UUID,
+    cursor: datetime | None = None,
+    size: int = 20,
+) -> tuple[list[Session], bool]:
+    # 프로젝트 소유권을 먼저 확인한다 (없으면 404, 남의 것이면 403)
+    await project_service.get_project(db, project_id, user_id)
+
+    query = (
+        select(Session)
+        .where(Session.project_id == project_id, Session.user_id == user_id)
+        .order_by(Session.updated_at.desc())
+        .limit(size + 1)
+    )
+    if cursor:
+        query = query.where(Session.updated_at < cursor)
 
     result = await db.scalars(query)
     sessions = list(result.all())

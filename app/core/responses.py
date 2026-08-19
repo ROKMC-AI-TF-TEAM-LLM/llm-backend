@@ -63,6 +63,13 @@ R_403_SESSION = {
     )
 }
 
+R_403_PROJECT = {
+    403: _resp(
+        "프로젝트 접근 거부",
+        access_denied=_ex(403, "PROJECT_ACCESS_DENIED", "접근 권한이 없습니다."),
+    )
+}
+
 # 404
 R_404_USER = {
     404: _resp(
@@ -75,6 +82,13 @@ R_404_SESSION = {
     404: _resp(
         "세션 없음",
         session_not_found=_ex(404, "SESSION_NOT_FOUND", "세션을 찾을 수 없습니다."),
+    )
+}
+
+R_404_PROJECT = {
+    404: _resp(
+        "프로젝트 없음",
+        project_not_found=_ex(404, "PROJECT_NOT_FOUND", "프로젝트를 찾을 수 없습니다."),
     )
 }
 
@@ -99,6 +113,17 @@ R_404_DOCUMENT = {
     )
 }
 
+R_400_DOCUMENT = {
+    400: _resp(
+        "적재 요청 거부 (AI 서버 검증 실패)",
+        bad_request=_ex(
+            400,
+            "BAD_REQUEST",
+            "지원하지 않는 형식: report.exe (지원: .md, .txt, .pdf)",
+        ),
+    )
+}
+
 R_400_MESSAGE_ROLE = {
     400: _resp(
         "잘못된 메시지 역할",
@@ -119,6 +144,14 @@ R_422 = {
     422: _resp(
         "요청 유효성 오류",
         validation_error=_ex(422, "VALIDATION_ERROR", "요청 파라미터 유효성 검사 실패"),
+    )
+}
+
+# 413
+R_413_DOCUMENT = {
+    413: _resp(
+        "파일 용량 초과",
+        file_too_large=_ex(413, "FILE_TOO_LARGE", "업로드할 파일 용량이 50MB를 초과하였습니다."),
     )
 }
 

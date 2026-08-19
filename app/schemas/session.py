@@ -6,6 +6,8 @@ from pydantic import BaseModel
 
 class SessionCreate(BaseModel):
     title: str = "새 대화"
+    # 지정하면 해당 프로젝트 소속 대화가 된다 (생략 시 일반 대화)
+    project_id: uuid.UUID | None = None
 
 
 class SessionUpdate(BaseModel):
@@ -18,6 +20,8 @@ class SessionFavoriteUpdate(BaseModel):
 
 class SessionResponse(BaseModel):
     session_id: uuid.UUID
+    # 프로젝트에 속하지 않은 일반 대화는 null
+    project_id: uuid.UUID | None
     title: str
     is_favorite: bool
     updated_at: datetime

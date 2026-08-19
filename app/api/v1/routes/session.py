@@ -6,7 +6,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
 from app.core.deps import get_current_user
-from app.core.responses import R_401, R_403_SESSION, R_404_SESSION, R_422
+from app.core.responses import (
+    R_401,
+    R_403_PROJECT,
+    R_403_SESSION,
+    R_404_PROJECT,
+    R_404_SESSION,
+    R_422,
+)
 from app.models.user import User
 from app.schemas.common import ApiResponse
 from app.schemas.session import (
@@ -26,8 +33,12 @@ router = APIRouter(prefix="/sessions", tags=["sessions"])
     response_model=ApiResponse[SessionResponse],
     status_code=status.HTTP_201_CREATED,
     summary="세션 생성",
-    description="새로운 채팅 세션을 생성합니다.",
-    responses={**R_401, **R_422},
+    description=(
+        "새로운 채팅 세션을 생성합니다.\n\n"
+        "- `project_id`를 지정하면 해당 프로젝트 소속 대화가 됩니다 (생략 시 일반 대화)\n"
+        "- 본인의 프로젝트만 지정할 수 있습니다"
+    ),
+    responses={**R_401, **R_403_PROJECT, **R_404_PROJECT, **R_422},
 )
 async def create_session(
     data: SessionCreate,
@@ -47,7 +58,8 @@ async def create_session(
         "- 첫 요청: cursor 없이 호출\n"
         "- 다음 페이지: 응답의 `next_cursor` 값을 cursor로 전달\n"
         "- `has_next`가 false이면 마지막 페이지\n"
-        "- `is_favorite=true`로 즐겨찾기한 세션만 조회 가능"
+        "- `is_favorite=true`로 즐겨찾기한 세션만 조회 가능\n"
+        "- `project_id`는 프로젝트 소속 대화면 해당 프로젝트 ID, 일반 대화면 null"
     ),
     responses={**R_401, **R_422},
 )

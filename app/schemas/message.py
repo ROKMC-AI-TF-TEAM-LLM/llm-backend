@@ -38,6 +38,7 @@ class MessageResponse(BaseModel):
     content: str
     created_at: datetime
     domain: str | None = None
+    notice_code: str | None = None
     sources: list[SourceResponse] = []
     attachments: list[AttachmentResponse] = []
 

@@ -139,6 +139,14 @@ R_409_EMAIL = {
     )
 }
 
+R_409_DOCUMENT_RETRY = {
+    409: _resp(
+        "재시도할 수 없는 상태",
+        indexing=_ex(409, "CONFLICT", "색인이 진행 중입니다. 완료된 뒤에 다시 시도해 주세요."),
+        already_done=_ex(409, "CONFLICT", "이미 색인이 완료된 문서입니다."),
+    )
+}
+
 # 422
 R_422 = {
     422: _resp(

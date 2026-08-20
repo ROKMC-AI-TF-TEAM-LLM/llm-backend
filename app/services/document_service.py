@@ -67,6 +67,79 @@ async def relay_document(
         raise LLMServerError(detail="LLM 서버에 연결할 수 없습니다.")
 
 
+# 재시도 가능한 상태 — 적재 요청 전(pending)이거나 실패로 끝난(error) 문서만.
+# 진행 중(queued/running)에 다시 보내면 같은 문서로 작업이 둘 돌고, 먼저 끝난 job이
+# DB의 job_id와 어긋나 상태가 갱신되지 않는다. done은 재시도가 아니라 재적재다.
+RETRYABLE_STATUSES = ("pending", "error")
+
+
+async def submit_ingest(db: AsyncSession, doc: Document, data: bytes) -> Document:
+    """MARS에 적재 작업을 접수시키고 그 결과를 문서 행에 기록한다.
+
+    최초 업로드(관리자·프로젝트)와 재시도가 모두 이 함수를 쓴다 — 기록 규칙이
+    여러 벌이 되면 경로마다 status/error 표기가 갈린다.
+
+    relay에 실패하면 **job_id를 버린다.** 살아 있는 작업이 없는데 남겨 두면
+    `get_document_status`가 죽은 job을 폴링해 404를 받고, 실제 실패 사유를
+    "이력이 유실되었습니다"로 덮어쓴다.
+
+    ⚠ 그 결과 "job_id는 없는데 MARS에는 청크가 있는" 상태가 생길 수 있다
+    (MARS가 202로 접수한 뒤 응답이 timeout된 경우). 삭제 경로가 job_id로
+    청크 존재를 판단하므로 그때는 청크가 남는다 — **D6(job 404 시 실제 적재
+    여부 조회)에서 함께 정리하기로 한 사안이다.**
+    """
+    try:
+        relay = await relay_document(
+            name=doc.name,
+            domain=doc.domain,
+            visibility=getattr(doc.visibility, "value", doc.visibility),
+            data=data,
+            department=doc.department,
+            project_id=str(doc.project_id) if doc.project_id else None,
+        )
+    except Exception as e:
+        doc.status = "error"      # MARS에 못 보냄 → 로컬 실패 표시
+        doc.error = str(e)
+        doc.job_id = None         # 죽은 작업 id — 폴링 대상으로 남기지 않는다
+        await db.commit()
+        raise
+
+    doc.job_id = relay["job_id"]
+    # MARS가 준 status를 그대로 저장 (없으면 방금 접수됐으니 queued)
+    doc.status = relay.get("status", "queued")
+    # 이전 시도의 흔적을 지운다 — 재시도인데 옛 실패 사유가 남아 있으면 안 된다
+    doc.error = None
+    doc.chunks_indexed = None
+    await db.commit()
+    await db.refresh(doc)
+    return doc
+
+
+async def retry_ingest(db: AsyncSession, doc: Document, data: bytes) -> Document:
+    """실패한 문서의 색인을 같은 원본으로 다시 요청한다 (관리자·프로젝트 공용).
+
+    MARS는 같은 name을 다시 받으면 기존 청크를 지우고 재적재하므로, 색인이 이미
+    끝난 문서를 오판해 재시도해도 중복 적재가 되지는 않는다. 그래도 진행 중인
+    작업은 막는다 — 위 RETRYABLE_STATUSES 주석 참조.
+
+    `data`는 호출자가 undefer로 함께 읽어 온 원본이다. deferred 컬럼이라
+    여기서 doc.data를 건드리면 비동기 세션에서 lazy load가 터진다.
+    """
+    if doc.status not in RETRYABLE_STATUSES:
+        detail = (
+            "이미 색인이 완료된 문서입니다."
+            if doc.status == "done"
+            else "색인이 진행 중입니다. 완료된 뒤에 다시 시도해 주세요."
+        )
+        logger.warning(
+            "재시도 불가 상태 document_id=%s status=%s", doc.document_id, doc.status
+        )
+        raise ConflictError(detail=detail)
+
+    logger.info("색인 재시도 document_id=%s name=%s", doc.document_id, doc.name)
+    return await submit_ingest(db, doc, data)
+
+
 async def get_job(job_id: str) -> dict | None:
     url = f"{settings.llm_server_url}/documents/jobs/{job_id}"
 
@@ -188,21 +261,28 @@ async def upload_document(
     await db.commit()
     await db.refresh(doc)
 
-    try:
-        relay_response = await relay_document(name=name, domain=domain, visibility=visibility, data=data, department=department)
-    except Exception as e:
-        doc.status = "error"      # MARS에 못 보냄 → 로컬 실패 표시
-        doc.error = str(e)
-        await db.commit()
-        raise
+    return await submit_ingest(db, doc, data)
 
-    doc.job_id = relay_response["job_id"]
-    # MARS가 준 status를 그대로 저장 (없으면 방금 접수됐으니 queued)
-    doc.status = relay_response.get("status", "queued")
-    await db.commit()
-    await db.refresh(doc)
 
-    return doc
+async def retry_document_admin(db: AsyncSession, document_id: uuid.UUID) -> Document:
+    """실패한 전사 문서의 색인을 다시 요청한다.
+
+    [전사 문서 전용] 프로젝트 참고 파일은 이 경로로 재시도할 수 없다 — 관리자가
+    남의 개인 파일을 다시 적재하게 되기 때문이다. 프로젝트 파일은
+    `project_service.retry_project_document`가 소유권을 확인하고 처리한다. I-09 참조.
+    """
+    doc = await db.scalar(
+        select(Document)
+        .where(
+            Document.document_id == document_id,
+            Document.project_id.is_(None),
+        )
+        .options(undefer(Document.data))  # 원본을 다시 보내야 하므로 함께 읽는다
+    )
+    if doc is None:
+        raise DocumentNotFoundError()
+
+    return await retry_ingest(db, doc, doc.data)
 
 
 async def get_document_status(db: AsyncSession, document_id: uuid.UUID) -> Document:

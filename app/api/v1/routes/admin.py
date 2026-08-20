@@ -6,7 +6,17 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
 from app.core.deps import get_current_admin
-from app.core.responses import R_401, R_403_ADMIN, R_404_DOCUMENT, R_404_USER, R_422, R_502_LLM
+from app.core.responses import (
+    R_400_DOCUMENT,
+    R_401,
+    R_403_ADMIN,
+    R_404_DOCUMENT,
+    R_404_USER,
+    R_409_DOCUMENT_RETRY,
+    R_413_DOCUMENT,
+    R_422,
+    R_502_LLM,
+)
 from app.models.user import ApprovalStatus, User, UserRole
 from app.schemas.common import ApiResponse
 from app.schemas.document import (
@@ -163,6 +173,39 @@ async def get_status(
 ):
     doc = await document_service.get_document_status(db, document_id)
     return ApiResponse.ok(doc)
+
+
+@router.post(
+    "/documents/{document_id}/retry",
+    response_model=ApiResponse[DocumentStatusResponse],
+    status_code=202,
+    summary="문서 색인 재시도",
+    description=(
+        "색인에 실패한 문서를 DB에 보관된 원본 그대로 MARS에 다시 적재 요청한다. "
+        "파일을 다시 업로드할 필요가 없고, 문서 행도 새로 만들지 않고 재사용한다.\n\n"
+        "- 재시도할 수 있는 상태는 `error`(실패) / `pending`(적재 요청 전)뿐이다\n"
+        "- `queued`·`running`(진행 중)이거나 `done`(완료)이면 409\n"
+        "- 접수되면 즉시 202를 반환하며, 진행 상태는 "
+        "`GET /admin/documents/{document_id}/status`로 확인한다"
+    ),
+    responses={
+        **R_400_DOCUMENT,
+        **R_401,
+        **R_403_ADMIN,
+        **R_404_DOCUMENT,
+        **R_409_DOCUMENT_RETRY,
+        **R_413_DOCUMENT,
+        **R_422,
+        **R_502_LLM,
+    },
+)
+async def retry_document(
+    document_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(get_current_admin),
+):
+    doc = await document_service.retry_document_admin(db, document_id)
+    return ApiResponse.ok(DocumentStatusResponse.model_validate(doc), status_code=202)
 
 
 @router.get(

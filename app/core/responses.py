@@ -155,10 +155,26 @@ R_413_DOCUMENT = {
     )
 }
 
+R_413_TRANSLATE = {
+    413: _resp(
+        "원문 길이 초과",
+        text_too_long=_ex(413, "TEXT_TOO_LONG", "입력이 5000자 제한을 넘었다 (6200자)"),
+    )
+}
+
 # 502
 R_502_LLM = {
     502: _resp(
         "LLM 서버 오류",
         llm_server_error=_ex(502, "LLM_SERVER_ERROR", "LLM 서버 오류가 발생했습니다."),
+    )
+}
+
+R_502_TRANSLATE = {
+    502: _resp(
+        "번역 서버 오류",
+        unreachable=_ex(502, "TRANSLATE_SERVER_ERROR", "번역 서버에 연결할 수 없습니다."),
+        timeout=_ex(502, "TRANSLATE_SERVER_ERROR", "번역 서버 응답 시간이 초과되었습니다."),
+        upstream_error=_ex(502, "TRANSLATE_SERVER_ERROR", "번역 서버 오류: HTTP 500"),
     )
 }

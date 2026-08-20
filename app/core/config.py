@@ -10,6 +10,12 @@ class Settings(BaseSettings):
     max_document_size_mb: int = 50
     log_level: str = "INFO"
 
+    # 군사 도메인 한↔영 번역 서버(NeuroDomain-Translate). 채팅용 AI 서버와 별개 프로세스다.
+    translate_server_url: str = "http://localhost:9001"
+    # 번역 서버는 원문을 청크로 쪼개 모델을 여러 번 부른다(청크당 상한 180초).
+    # request_timeout(60초)을 그대로 쓰면 서버가 아직 번역 중인데 프록시가 먼저 끊는다.
+    translate_timeout: int = 300
+
     database_url: str = "mysql+asyncmy://user:password@localhost:3306/llm_db?charset=utf8mb4"
 
     jwt_secret_key: str = "change-here"

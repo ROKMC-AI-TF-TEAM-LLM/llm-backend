@@ -416,9 +416,19 @@ alembic upgrade head
 | `LLM_SERVER_URL` | `http://localhost:8001` | LLM 서버 주소 |
 | `REQUEST_TIMEOUT` | `60` | 연결 타임아웃 (초, read는 무제한) |
 | `MAX_ATTACHMENT_SIZE_MB` | `20` | AI 생성 문서 저장 크기 상한 (MB) |
+| `MAX_DOCUMENT_SIZE_MB` | `50` | 업로드 문서 크기 상한 (MB, AI 서버 상한과 동일) |
+| `TRANSLATE_SERVER_URL` | `http://localhost:9001` | 번역 서버(NeuroDomain-Translate) 주소 |
+| `TRANSLATE_TIMEOUT` | `300` | 번역 요청 타임아웃 (초) |
 | `DATABASE_URL` | — | MySQL 연결 문자열 (`mysql+asyncmy://user:pw@host:3306/db?charset=utf8mb4`) |
 | `JWT_SECRET_KEY` | — | JWT 서명 키 (반드시 환경변수로 설정) |
 | `JWT_ALGORITHM` | `HS256` | JWT 알고리즘 |
 | `ACCESS_TOKEN_EXPIRE_MINUTES` | `30` | 액세스 토큰 만료 시간 (분) |
 | `REFRESH_TOKEN_EXPIRE_DAYS` | `7` | 리프레시 토큰 만료 시간 (일) |
 | `LOG_LEVEL` | `INFO` | 로그 레벨 (`DEBUG`, `INFO`, `WARNING`) |
+
+> 번역 API(`POST /api/v1/translate`)는 번역 서버가 별도 프로세스로 떠 있어야 동작합니다.
+> 채팅용 AI 서버(`LLM_SERVER_URL`)와 다른 서버이며, 기본 포트는 9001입니다.
+>
+> `TRANSLATE_TIMEOUT`을 `REQUEST_TIMEOUT`(60초)과 맞추면 안 됩니다. 번역 서버는 원문을
+> 청크로 쪼개 모델을 여러 번 부르고 청크당 상한이 180초라, 서버가 아직 번역 중인데
+> 백엔드가 먼저 연결을 끊습니다.

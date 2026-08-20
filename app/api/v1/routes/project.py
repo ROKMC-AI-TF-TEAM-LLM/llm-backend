@@ -12,6 +12,7 @@ from app.core.responses import (
     R_403_PROJECT,
     R_404_DOCUMENT,
     R_404_PROJECT,
+    R_409_DOCUMENT_RETRY,
     R_413_DOCUMENT,
     R_422,
     R_502_LLM,
@@ -318,6 +319,44 @@ async def get_project_document_status(
         db, project_id, document_id, current_user.user_id
     )
     return ApiResponse.ok(DocumentStatusResponse.model_validate(doc), status_code=200)
+
+
+@router.post(
+    "/{project_id}/documents/{document_id}/retry",
+    response_model=ApiResponse[DocumentStatusResponse],
+    status_code=status.HTTP_202_ACCEPTED,
+    summary="참고 파일 색인 재시도",
+    description=(
+        "색인에 실패한 참고 파일을 서버에 보관된 원본으로 다시 적재 요청합니다. "
+        "본인의 프로젝트 파일만 재시도할 수 있습니다.\n\n"
+        "- **파일을 다시 업로드하지 않아도 됩니다.** 같은 파일이 목록에 하나 더 생기지 않습니다\n"
+        "- 재시도할 수 있는 상태는 `error`(실패) / `pending`(적재 요청 전)뿐입니다. "
+        "`queued`·`running`(진행 중)이거나 `done`(완료)이면 409를 반환합니다\n"
+        "- 접수되면 즉시 202를 반환하고 `status`는 다시 `queued`가 됩니다. 이후 진행 상태는 "
+        "`GET /projects/{project_id}/documents/{document_id}/status`로 확인하세요"
+    ),
+    responses={
+        **R_400_DOCUMENT,
+        **R_401,
+        **R_403_PROJECT,
+        **R_404_PROJECT,
+        **R_404_DOCUMENT,
+        **R_409_DOCUMENT_RETRY,
+        **R_413_DOCUMENT,
+        **R_422,
+        **R_502_LLM,
+    },
+)
+async def retry_project_document(
+    project_id: uuid.UUID,
+    document_id: uuid.UUID,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    doc = await project_service.retry_project_document(
+        db, project_id, document_id, current_user.user_id
+    )
+    return ApiResponse.ok(DocumentStatusResponse.model_validate(doc), status_code=202)
 
 
 @router.delete(

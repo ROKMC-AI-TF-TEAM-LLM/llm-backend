@@ -14,6 +14,7 @@ from datetime import datetime
 
 from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import undefer
 
 from app.core.config import settings
 from app.core.exceptions import (
@@ -217,26 +218,8 @@ async def upload_project_document(
     await db.commit()
     await db.refresh(doc)
 
-    try:
-        relay = await document_service.relay_document(
-            name=doc.name,
-            domain=doc.domain,
-            visibility=doc.visibility.value,
-            data=data,
-            project_id=str(project_id),
-        )
-    except Exception as e:
-        # 관리자 업로드와 같은 처리 — 실패 기록을 남겨 목록에서 원인을 볼 수 있게 한다
-        doc.status = "error"
-        doc.error = str(e)
-        await db.commit()
-        raise
-
-    doc.job_id = relay["job_id"]
-    doc.status = relay.get("status", "queued")
-    await db.commit()
-    await db.refresh(doc)
-    return doc
+    # 관리자 업로드와 같은 처리 — relay 결과·실패 기록 규칙을 한 곳에 둔다
+    return await document_service.submit_ingest(db, doc, data)
 
 
 async def get_project_documents(
@@ -302,6 +285,36 @@ async def get_project_document_status(
     if doc.status not in ("pending", "queued", "running"):
         return doc
     return await document_service.get_document_status(db, doc.document_id)
+
+
+async def retry_project_document(
+    db: AsyncSession,
+    project_id: uuid.UUID,
+    document_id: uuid.UUID,
+    user_id: uuid.UUID,
+) -> Document:
+    """색인에 실패한 참고 파일을 같은 원본으로 다시 적재 요청한다.
+
+    업로드와 별개의 경로다 — 사용자가 파일을 다시 고르지 않아도 되고, DB에
+    같은 문서가 한 벌 더 쌓이지도 않는다(같은 행을 재사용한다).
+
+    재시도 가능 상태와 MARS 재적재의 멱등성은 `document_service.retry_ingest` 참조.
+    """
+    await _get_project_owned(db, project_id, user_id)
+
+    # 조회에 project_id를 함께 건다 — 다른 프로젝트의 document_id를 넣어도 404로 끝난다
+    doc = await db.scalar(
+        select(Document)
+        .where(
+            Document.document_id == document_id,
+            Document.project_id == project_id,
+        )
+        .options(undefer(Document.data))  # 원본을 다시 보내야 하므로 함께 읽는다
+    )
+    if doc is None:
+        raise DocumentNotFoundError()
+
+    return await document_service.retry_ingest(db, doc, doc.data)
 
 
 async def delete_project_document(

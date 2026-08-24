@@ -9,14 +9,12 @@ class AppHTTPException(Exception):
         super().__init__(self.detail)
 
 
-# 400
 class BadRequestError(AppHTTPException):
     status_code = 400
     error_code = "BAD_REQUEST"
     detail = "Bad Request"
 
 
-# 401
 class UnauthorizedError(AppHTTPException):
     status_code = 401
     error_code = "UNAUTHORIZED"
@@ -35,7 +33,6 @@ class TokenInvalidError(AppHTTPException):
     detail = "유효하지 않은 토큰입니다."
 
 
-# 403
 class ForbiddenError(AppHTTPException):
     status_code = 403
     error_code = "FORBIDDEN"
@@ -72,7 +69,6 @@ class ProjectAccessDeniedError(AppHTTPException):
     detail = "접근 권한이 없습니다."
 
 
-# 404
 class NotFoundError(AppHTTPException):
     status_code = 404
     error_code = "NOT_FOUND"
@@ -121,7 +117,6 @@ class InvalidMessageRoleError(AppHTTPException):
     detail = "AI 메시지만 재생성할 수 있습니다."
 
 
-# 409
 class ConflictError(AppHTTPException):
     status_code = 409
     error_code = "CONFLICT"
@@ -133,7 +128,7 @@ class EmailAlreadyExistsError(AppHTTPException):
     error_code = "EMAIL_ALREADY_EXISTS"
     detail = "이미 사용 중인 이메일입니다."
 
-# 413
+
 class FileTooLargeError(AppHTTPException):
     status_code = 413
     error_code = "FILE_TOO_LARGE"
@@ -145,7 +140,7 @@ class TextTooLongError(AppHTTPException):
     error_code = "TEXT_TOO_LONG"
     detail = "번역할 원문이 길이 제한을 초과하였습니다."
 
-# 502
+
 class LLMServerError(AppHTTPException):
     status_code = 502
     error_code = "LLM_SERVER_ERROR"
@@ -158,7 +153,6 @@ class TranslateServerError(AppHTTPException):
     detail = "번역 서버 오류가 발생했습니다."
 
 
-# 500
 class InternalServerError(AppHTTPException):
     status_code = 500
     error_code = "INTERNAL_ERROR"

@@ -20,7 +20,6 @@ class SessionFavoriteUpdate(BaseModel):
 
 class SessionResponse(BaseModel):
     session_id: uuid.UUID
-    # 프로젝트에 속하지 않은 일반 대화는 null
     project_id: uuid.UUID | None
     title: str
     is_favorite: bool

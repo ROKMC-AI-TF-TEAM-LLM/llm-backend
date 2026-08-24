@@ -107,8 +107,7 @@ async def _verify_session(
     """세션 소유권을 확인하고 반환한다.
 
     load_project=True면 소속 프로젝트를 함께 로드한다. 지연 로딩은 async에서
-    터지므로(MissingGreenlet) 프로젝트 값을 쓸 경로는 반드시 이 옵션을 켤 것.
-    목록·삭제처럼 프로젝트가 필요 없는 경로까지 join하지 않으려고 기본값은 False다.
+    MissingGreenlet으로 터지므로, 프로젝트 값을 쓸 경로는 반드시 켤 것.
     """
     query = select(Session).where(Session.session_id == session_id)
     if load_project:
@@ -126,11 +125,8 @@ async def _verify_session(
 def _project_context(session: Session) -> tuple[str | None, str | None]:
     """세션이 속한 프로젝트의 (검색 범위, 지침)을 꺼낸다. 일반 대화면 (None, None).
 
-    두 값 모두 요청 body가 아닌 **세션 행에서 읽는 것이 핵심**이다 — _verify_session이
-    세션 소유권을 이미 확인했으므로 이 값은 정의상 이 사용자의 프로젝트다.
-    AI 서버는 project_id를 검증 없이 신뢰하므로(멤버십 검증은 미들웨어 책임),
-    클라이언트가 값을 주입할 수 있으면 남의 프로젝트 문서가 읽히고 남의 지침이
-    적용된다. 주입 표면 자체를 두지 않는다.
+    두 값 모두 요청 body가 아닌 세션 행에서 읽는다 — AI 서버는 project_id를
+    검증 없이 신뢰하므로, 클라이언트가 값을 주입할 수 있으면 남의 프로젝트가 읽힌다.
     """
     if not session.project_id:
         return None, None

@@ -197,7 +197,6 @@ async def delete_all_project_documents(project_id: str) -> dict:
     except httpx.HTTPStatusError as e:
         status = e.response.status_code
         if status == 404:
-            # 해당 프로젝트에 적재된 문서 없음 → 멱등 처리
             logger.warning("프로젝트에 적재된 문서 없음 project_id=%s", project_id)
             return {"documents": [], "deleted_chunks": 0, "deleted_parents": 0}
         if status == 409:
@@ -387,7 +386,6 @@ async def get_document_file(db: AsyncSession, name: str) -> Document:
 
 
 async def delete_document_admin(db: AsyncSession, document_id: uuid.UUID) -> DocumentDeleteResponse:
-    # MARS는 문서명으로 삭제하므로 여기서 name을 꺼낸다
     # [전사 문서 전용] 프로젝트 참고 파일은 이 경로로 삭제할 수 없다 — 관리자 문서와
     # 삭제 규칙이 다르고(프로젝트 스코프), 소유자 동의 없이 사라지면 안 된다. I-09 참조.
     doc = await db.scalar(

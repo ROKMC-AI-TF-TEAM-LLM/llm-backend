@@ -219,3 +219,9 @@ __marimo__/
 
 # 문서 작업공간
 my_docs/
+
+# 폐쇄망 이전 검증 (대용량 wheel 번들/가상환경/설치파일, git 추적 제외)
+/airgap/wheelhouse/
+/airgap/venv-airgap/
+/airgap/VC_redist.x64.exe
+/airgap/*.log

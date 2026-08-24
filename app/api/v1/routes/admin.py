@@ -164,7 +164,7 @@ async def upload_document(
 @router.get(
     "/documents/{document_id}/status",
     response_model=ApiResponse[DocumentStatusResponse],
-    responses={**R_401, **R_403_ADMIN, **R_404_DOCUMENT},  # 404 헬퍼 없으면 새로 만들거나 그냥 스펙만
+    responses={**R_401, **R_403_ADMIN, **R_404_DOCUMENT},
 )
 async def get_status(
     document_id: uuid.UUID,

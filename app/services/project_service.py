@@ -39,11 +39,6 @@ logger = get_logger(__name__)
 # 반드시 명시할 것. ORM 속성 대입 후 commit 하면 모델의 onupdate가 무조건 발동한다.
 
 
-# ══════════════════════════════════════════════════════════════════════
-# 프로젝트 (1~8번)
-# ══════════════════════════════════════════════════════════════════════
-
-
 async def create_project(db: AsyncSession, user_id: uuid.UUID, data: ProjectCreate) -> Project:
     project = Project(
         user_id=user_id,
@@ -108,8 +103,7 @@ async def set_favorite(
     db: AsyncSession, project_id: uuid.UUID, user_id: uuid.UUID, is_favorite: bool
 ) -> Project:
     project = await _get_project_owned(db, project_id, user_id)
-    # updated_at을 SET에 그대로 명시해 onupdate 갱신을 막는다
-    # (즐겨찾기 변경이 최근 수정순 목록의 순서를 바꾸지 않도록)
+    # 정렬 순서(updated_at)에 영향 없이 변경 — 위 정렬 규칙 참고
     await db.execute(
         update(Project)
         .where(Project.project_id == project_id)
@@ -124,7 +118,6 @@ async def update_instructions(
     db: AsyncSession, project_id: uuid.UUID, user_id: uuid.UUID, data: ProjectInstructionUpdate
 ) -> Project:
     project = await _get_project_owned(db, project_id, user_id)
-    # 지침 수정은 '수정'으로 보지 않는다 — updated_at을 SET에 그대로 명시해 onupdate 갱신을 막는다
     # 빈 문자열은 생성 시와 동일하게 NULL로 정규화한다 (지침 삭제)
     await db.execute(
         update(Project)
@@ -164,11 +157,6 @@ async def delete_project(db: AsyncSession, project_id: uuid.UUID, user_id: uuid.
 
     await db.delete(project)
     await db.commit()
-
-
-# ══════════════════════════════════════════════════════════════════════
-# 프로젝트 참고 파일 (9~11번)
-# ══════════════════════════════════════════════════════════════════════
 
 
 async def upload_project_document(

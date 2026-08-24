@@ -39,8 +39,7 @@ class Document(Base):
     data: Mapped[bytes] = mapped_column(
         LargeBinary().with_variant(LONGBLOB(), "mysql"), nullable=False, deferred=True
     )
-    # 상태 저장: MARS가 주는 값(queued/running/done/error 등)을 번역 없이 그대로 저장한다.
-    # relay 전 로컬 초기값은 "pending".
+    # MARS가 주는 값(queued/running/done/error 등)을 번역 없이 그대로 저장. relay 전 초기값은 "pending"
     status: Mapped[str] = mapped_column(
         String(20), nullable=False, default="pending"
     )
@@ -53,11 +52,10 @@ class Document(Base):
         default=lambda: datetime.now(timezone.utc),
         nullable=False,
     )
-    #최근 갱신 시점 표시.
     updated_at: Mapped[datetime] = mapped_column(
         Timestamp,
         default=lambda: datetime.now(timezone.utc),
-        onupdate=lambda: datetime.now(timezone.utc),  # 행 바뀔 때마다 자동 갱신
+        onupdate=lambda: datetime.now(timezone.utc),
         nullable=False,
     )
 

@@ -36,25 +36,29 @@ llm-backend/
 │   │   └── logger.py                  # 로거
 │   ├── models/
 │   │   ├── user.py                    # User, UserRole, ApprovalStatus
-│   │   ├── session.py                 # Session
-│   │   ├── message.py                 # Message, RoleEnum
+│   │   ├── session.py                 # Session (project_id로 프로젝트 소속 여부 표현)
+│   │   ├── message.py                 # Message, RoleEnum, notice_code
 │   │   ├── source.py                  # Source (메시지 출처)
-│   │   ├── attachment.py              # Attachment (AI 생성 문서, BYTEA 보관)
-│   │   └── document.py                # Document (원본 문서 BYTEA 보관, VisibilityEnum)
+│   │   ├── attachment.py              # Attachment (AI 생성 문서, BLOB 보관)
+│   │   ├── document.py                # Document (원본 문서 BLOB 보관, 적재 상태·job_id)
+│   │   └── project.py                 # Project (워크스페이스, 지침)
 │   ├── schemas/
 │   │   ├── common.py                  # ApiResponse (공통 응답 래퍼)
 │   │   ├── user.py                    # UserCreate, UserUpdate, UserResponse 등
 │   │   ├── auth.py                    # LoginRequest, TokenResponse 등
 │   │   ├── session.py                 # SessionCreate, SessionResponse, SessionPageResponse
 │   │   ├── message.py                 # ChatRequest, RegenerateRequest, MessageResponse 등
-│   │   ├── document.py                # DocumentListResponse
+│   │   ├── document.py                # DocumentListResponse, AdminDocumentListResponse 등
+│   │   ├── project.py                 # ProjectCreate, ProjectDetailResponse 등
+│   │   ├── project_document.py        # 프로젝트 참고 파일 목록/업로드 응답
 │   │   └── capability.py              # CapabilityResponse (domain·tool 목록)
 │   ├── services/
 │   │   ├── auth_service.py            # JWT 발급/검증, 로그인
 │   │   ├── user_service.py            # 유저 CRUD, 승인/거절
 │   │   ├── session_service.py         # 세션 CRUD, cursor 기반 페이지네이션
-│   │   ├── message_service.py         # 메시지 저장, LLM 스트리밍, 출처 저장
-│   │   ├── document_service.py        # LLM 서버 문서 목록 프록시
+│   │   ├── message_service.py         # 메시지 저장, LLM 스트리밍, 출처·첨부 저장
+│   │   ├── project_service.py         # 프로젝트 CRUD + 참고 파일 업로드·재시도·삭제
+│   │   ├── document_service.py        # LLM 서버 문서 적재/조회/삭제 릴레이 (전사·프로젝트 공용)
 │   │   ├── capability_service.py      # LLM 서버 domain·tool 목록 프록시
 │   │   ├── file_service.py            # 생성 문서(첨부) 조회 + 소유권 검증
 │   │   ├── health_service.py          # DB / LLM 서버 헬스체크
@@ -65,8 +69,9 @@ llm-backend/
 │       ├── user.py                    # GET /users/me
 │       ├── session.py                 # CRUD /sessions
 │       ├── message.py                 # GET|POST /sessions/{id}/messages
-│       ├── admin.py                   # GET|PATCH|DELETE /admin/users
-│       ├── document.py                # GET /documents
+│       ├── project.py                 # CRUD /projects + 하위 세션·참고 파일
+│       ├── admin.py                   # 회원 관리 + 전사 문서 적재·재시도·삭제
+│       ├── document.py                # GET /documents (전사 공용 문서 조회·다운로드)
 │       ├── capability.py              # GET /capabilities
 │       └── file.py                    # GET /files/{attachment_id}
 ├── alembic/                           # DB 마이그레이션
@@ -95,7 +100,20 @@ llm-backend/
 | POST | `/api/v1/sessions/{id}/messages/stream` | LLM 스트리밍 채팅 (SSE) | 필요 |
 | DELETE | `/api/v1/sessions/{id}/messages/{msg_id}` | 메시지 삭제 | 필요 |
 | POST | `/api/v1/sessions/{id}/messages/{msg_id}/regenerate` | AI 응답 재생성 (SSE) | 필요 |
-| GET | `/api/v1/documents` | RAG 문서 목록 (offset 기반, `domain` 필터) | 필요 |
+| POST | `/api/v1/projects` | 프로젝트 워크스페이스 생성 | 필요 |
+| GET | `/api/v1/projects` | 프로젝트 목록 (cursor 기반) | 필요 |
+| GET | `/api/v1/projects/{id}` | 프로젝트 창 진입 (상세 조회) | 필요 |
+| PATCH | `/api/v1/projects/{id}` | 프로젝트 제목 수정 | 필요 |
+| PATCH | `/api/v1/projects/{id}/favorite` | 프로젝트 즐겨찾기 등록/해제 | 필요 |
+| PATCH | `/api/v1/projects/{id}/instruction` | 프로젝트 지침 설정/수정/삭제 | 필요 |
+| DELETE | `/api/v1/projects/{id}` | 프로젝트 삭제 (하위 세션·참고 파일 함께 삭제) | 필요 |
+| GET | `/api/v1/projects/{id}/sessions` | 프로젝트 하위 대화 세션 목록 (cursor 기반) | 필요 |
+| POST | `/api/v1/projects/{id}/documents` | 프로젝트 참고 파일 업로드 (202) | 필요 |
+| GET | `/api/v1/projects/{id}/documents` | 프로젝트 참고 파일 목록 (offset 기반) | 필요 |
+| GET | `/api/v1/projects/{id}/documents/{doc_id}/status` | 참고 파일 색인 상태 조회 | 필요 |
+| POST | `/api/v1/projects/{id}/documents/{doc_id}/retry` | 참고 파일 색인 재시도 (202) | 필요 |
+| DELETE | `/api/v1/projects/{id}/documents/{doc_id}` | 프로젝트 참고 파일 삭제 | 필요 |
+| GET | `/api/v1/documents` | 전사 공용 문서 목록 (offset 기반, `domain` 필터) | 필요 |
 | GET | `/api/v1/documents/{name}/download` | 원본 문서 다운로드 (문서명 조회, 최신본) | 필요 |
 | GET | `/api/v1/capabilities` | 채팅에 사용 가능한 domain·tool 목록 | 필요 |
 | GET | `/api/v1/files/{attachment_id}` | AI 생성 문서(HWPX 등) 다운로드 | 필요 |
@@ -104,6 +122,11 @@ llm-backend/
 | PATCH | `/api/v1/admin/users/{id}/approve` | 회원 가입 승인 | 관리자 |
 | PATCH | `/api/v1/admin/users/{id}/reject` | 회원 가입 거절 | 관리자 |
 | DELETE | `/api/v1/admin/users/{id}` | 회원 삭제 | 관리자 |
+| POST | `/api/v1/admin/documents` | 전사 문서 업로드 및 색인 요청 (202) | 관리자 |
+| GET | `/api/v1/admin/documents` | 전사 문서 목록 (offset 기반, `domain`/`search` 필터) | 관리자 |
+| GET | `/api/v1/admin/documents/{id}/status` | 문서 색인 상태 조회 | 관리자 |
+| POST | `/api/v1/admin/documents/{id}/retry` | 문서 색인 재시도 (202) | 관리자 |
+| DELETE | `/api/v1/admin/documents/{id}` | 문서 삭제 (색인 청크 함께 삭제) | 관리자 |
 
 ## 공통 응답 형식
 
@@ -142,11 +165,18 @@ llm-backend/
 | `APPROVAL_REJECTED` | 403 | 승인이 거절된 계정 |
 | `ADMIN_REQUIRED` | 403 | 관리자 권한 필요 |
 | `SESSION_ACCESS_DENIED` | 403 | 세션 접근 권한 없음 |
+| `PROJECT_ACCESS_DENIED` | 403 | 프로젝트 접근 권한 없음 |
 | `USER_NOT_FOUND` | 404 | 사용자 없음 |
 | `SESSION_NOT_FOUND` | 404 | 세션 없음 |
+| `PROJECT_NOT_FOUND` | 404 | 프로젝트 없음 |
 | `MESSAGE_NOT_FOUND` | 404 | 메시지 없음 |
+| `FILE_NOT_FOUND` | 404 | AI 생성 문서(첨부) 없음 |
+| `DOCUMENT_NOT_FOUND` | 404 | 문서 없음 |
 | `INVALID_MESSAGE_ROLE` | 400 | AI 메시지가 아닌 메시지로 재생성 요청 |
+| `BAD_REQUEST` | 400 | 문서 적재 요청 거부 (AI 서버 형식·파라미터 검증 실패) |
 | `EMAIL_ALREADY_EXISTS` | 409 | 이메일 중복 |
+| `CONFLICT` | 409 | 문서 색인 재시도 불가 상태 (진행 중이거나 이미 완료) |
+| `FILE_TOO_LARGE` | 413 | 업로드 파일 용량 초과 |
 | `VALIDATION_ERROR` | 422 | 요청 파라미터 유효성 오류 |
 | `LLM_SERVER_ERROR` | 502 | LLM 서버 연결 오류 |
 
@@ -172,11 +202,32 @@ llm-backend/
 }
 ```
 
+### 프로젝트 목록 — cursor 기반
+
+세션 목록과 동일한 방식(`updated_at` 기준). `is_favorite=true`로 즐겨찾기한 프로젝트만 필터링 가능.
+
+```
+첫 요청:  GET /api/v1/projects?size=20
+다음 요청: GET /api/v1/projects?cursor={next_cursor}&size=20
+```
+
+### 프로젝트 하위 세션 목록 — cursor 기반
+
+`GET /api/v1/projects/{id}/sessions` — 응답 형식은 `/api/v1/sessions`와 동일하고, 해당 프로젝트 소속 세션만 반환한다.
+
 ### 문서 목록 — offset 기반
 
 ```
 첫 요청:  GET /api/v1/documents?offset=0&limit=20
 다음 요청: GET /api/v1/documents?offset=20&limit=20
+종료 조건: has_more == false
+```
+
+### 프로젝트 참고 파일 목록 — offset 기반
+
+```
+첫 요청:  GET /api/v1/projects/{id}/documents?offset=0&limit=50
+다음 요청: GET /api/v1/projects/{id}/documents?offset=50&limit=50
 종료 조건: has_more == false
 ```
 
@@ -187,6 +238,11 @@ llm-backend/
 ```
 GET /api/v1/admin/users?role=user&status=pending&search=홍길동&size=20
 ```
+
+### 관리자 문서 목록 / 프로젝트 참고 파일 목록 상태
+
+`status`는 마지막으로 기록된 값이다 (목록 조회는 AI 서버에 묻지 않는다). 진행 중인 항목의 최신 상태는
+`GET /api/v1/admin/documents/{id}/status` 또는 `GET /api/v1/projects/{id}/documents/{doc_id}/status`로 확인한다.
 
 ## 세션 즐겨찾기
 
@@ -206,6 +262,15 @@ GET /api/v1/admin/users?role=user&status=pending&search=홍길동&size=20
 ```
 
 > 즐겨찾기 변경은 `updated_at`을 갱신하지 않으므로 세션 목록(최근 수정순)의 순서에 영향을 주지 않습니다.
+
+## 프로젝트 워크스페이스
+
+관련 대화와 참고 자료를 묶어두는 작업 공간입니다. 세션 생성 시 `project_id`를 지정하면 해당 프로젝트 소속 대화가 됩니다.
+
+- **지침(`instructions`)** — 프로젝트 내 모든 대화에 공통으로 적용되는 지시문(최대 1000자). `PATCH /projects/{id}/instruction`으로 설정하며, `null`/빈 문자열을 보내면 삭제됩니다. 지침·즐겨찾기 변경은 `updated_at`을 갱신하지 않습니다(세션과 동일한 정렬 규칙).
+- **검색 범위** — 프로젝트 소속 대화는 전사 공용 문서 + 그 프로젝트의 참고 파일을 함께 검색합니다. 일반 대화(프로젝트 미소속)는 전사 공용 문서만 검색합니다. 이 범위는 세션에 저장된 `project_id`로 서버가 결정하며 요청으로 바꿀 수 없습니다.
+- **참고 파일** — `POST /projects/{id}/documents`로 업로드하며, 형식(`.md`/`.txt`/`.pdf`)·용량(최대 `MAX_DOCUMENT_SIZE_MB`) 제한은 전사 문서 업로드와 동일합니다. 이 파일은 해당 프로젝트 대화에서만 검색되고, 도메인 분류·부서 ACL은 적용되지 않습니다.
+- **삭제** — 프로젝트를 삭제하면 하위 세션·메시지·참고 파일이 함께 삭제됩니다(되돌릴 수 없음). 색인된 참고 파일은 AI 서버의 벡터스토어 청크를 먼저 정리한 뒤 원본을 삭제합니다.
 
 ## LLM 스트리밍 요청/응답 형식
 
@@ -230,6 +295,7 @@ GET /api/v1/admin/users?role=user&status=pending&search=홍길동&size=20
 - 조합: `tool=DOC_SEARCH` + `domain=DIRECTIVE` → 훈령 전용 검색 탭 UI
 - 사용 가능한 값 목록은 `GET /api/v1/capabilities`로 조회 (하드코딩 대신 이 API를 데이터 소스로 권장)
 - 재생성 시 원래 질문의 `domain`·`tool`은 저장되지 않으므로, 같은 모드로 재생성하려면 body에 다시 지정해야 함
+- 검색 범위(전사 문서 / 프로젝트 참고 파일)는 세션의 프로젝트 소속 여부로 결정되며 body로 지정할 수 없음 (자세한 내용은 [프로젝트 워크스페이스](#프로젝트-워크스페이스) 참고)
 
 ```
 // 진행 상태 (라우팅/검색/생성 단계 표시용)
@@ -239,6 +305,10 @@ data: {"type": "status", "stage": "route", "message": "질문을 분석하는 �
 data: {"type": "text", "content": "안녕"}
 
 data: {"type": "text", "content": "하세요"}
+
+// 답변에 대한 경고 (0~1회) — 내부 문서에서 근거를 찾지 못해 AI의 일반 지식으로 작성됨을 의미.
+// 메시지 이력의 notice_code로도 저장되어, 세션 재진입 시에도 동일하게 표시할 수 있다
+data: {"type": "notice", "level": "warning", "code": "ungrounded_knowledge", "message": "..."}
 
 // 참조 문서 출처
 data: {"type": "sources", "items": [{"name": "doc.pdf", "page": "3"}]}
@@ -252,6 +322,8 @@ data: {"type": "done"}
 // 오류 발생 (LLM 오류, 빈 응답, 메시지 없음, role 오류 포함)
 data: {"type": "error", "message": "오류 내용"}
 ```
+
+이벤트 순서는 `status* → text* → notice? → sources → files? → done`이며 `done`이 항상 마지막입니다. 클라이언트는 모르는 `type`을 무시하도록 구현하세요(향후 확장 대비).
 
 > **재생성 흐름:** `regenerate` 엔드포인트는 기존 AI 메시지를 삭제하고 동일한 질문으로 LLM에 재요청합니다. `message_id`는 반드시 `role: "ai"`인 메시지여야 합니다.
 
@@ -272,6 +344,8 @@ AI 서버의 원본 파일은 정리 주기에 따라 삭제될 수 있지만, �
 
 AI 응답에 참조한 문서 정보가 `sources` 배열로, 생성 문서가 `attachments` 배열로 함께 반환됩니다. 각 메시지에 `message_id`가 포함됩니다.
 
+`notice_code`는 스트리밍 중 받은 `notice` 이벤트의 `code`를 그대로 담습니다(경고가 없었으면 `null`). 재조회 시에도 실시간과 동일하게 경고를 표시하기 위한 필드이며, 값이 있으면 `sources`가 비어 있는 것이 정상입니다.
+
 ```json
 // GET /api/v1/sessions/{id}/messages 응답 예시
 {
@@ -289,6 +363,7 @@ AI 응답에 참조한 문서 정보가 `sources` 배열로, 생성 문서가 `a
       "role": "ai",
       "content": "AI 응답 내용",
       "created_at": "2026-06-28T23:34:53Z",
+      "notice_code": null,
       "sources": [
         { "name": "doc.pdf", "page": "3" }
       ],
@@ -314,7 +389,7 @@ AI 응답에 참조한 문서 정보가 `sources` 배열로, 생성 문서가 `a
 
 ## 문서 목록 응답
 
-`domain` 쿼리 파라미터로 도메인별 필터링이 가능합니다 (예: `?domain=MANUAL`).
+`domain` 쿼리 파라미터로 도메인별 필터링이 가능합니다 (예: `?domain=MANUAL`). 전사 공용 문서만 반환하며, 프로젝트 참고 파일은 포함되지 않습니다.
 
 ```json
 // GET /api/v1/documents?offset=0&limit=20 응답 예시
@@ -335,6 +410,27 @@ AI 응답에 참조한 문서 정보가 `sources` 배열로, 생성 문서가 `a
   "has_more": true
 }
 ```
+
+## 문서 적재 · 색인 상태
+
+관리자 문서(`POST /admin/documents`)와 프로젝트 참고 파일(`POST /projects/{id}/documents`)은 모두 업로드 즉시 202를 반환하고, 색인은 AI 서버(MARS)에서 비동기로 진행됩니다.
+
+```
+status 흐름: pending(적재 요청 전) → queued(대기) → running(색인 중) → done(완료) | error(실패)
+```
+
+```json
+// GET /api/v1/admin/documents/{id}/status 또는 /api/v1/projects/{id}/documents/{doc_id}/status 응답 예시
+{
+  "document_id": "...",
+  "status": "done",
+  "chunks_indexed": 42,
+  "error": null
+}
+```
+
+- 권장 폴링 주기 10~15초. `done`/`error`가 되면 폴링을 중단합니다.
+- 실패한 문서는 `POST .../retry`로 같은 원본을 다시 적재 요청할 수 있습니다 (파일 재업로드 불필요). 재시도 가능 상태는 `error`·`pending`뿐이며, 진행 중이거나 이미 완료된 문서는 409를 반환합니다.
 
 ## 사용 가능한 domain·tool 목록
 
@@ -416,7 +512,7 @@ alembic upgrade head
 | `LLM_SERVER_URL` | `http://localhost:8001` | LLM 서버 주소 |
 | `REQUEST_TIMEOUT` | `60` | 연결 타임아웃 (초, read는 무제한) |
 | `MAX_ATTACHMENT_SIZE_MB` | `20` | AI 생성 문서 저장 크기 상한 (MB) |
-| `MAX_DOCUMENT_SIZE_MB` | `50` | 업로드 문서 크기 상한 (MB, AI 서버 상한과 동일) |
+| `MAX_DOCUMENT_SIZE_MB` | `50` | 업로드 문서(전사 문서·프로젝트 참고 파일) 크기 상한 (MB), AI 서버 상한과 동일하게 유지 |
 | `TRANSLATE_SERVER_URL` | `http://localhost:9001` | 번역 서버(NeuroDomain-Translate) 주소 |
 | `TRANSLATE_TIMEOUT` | `300` | 번역 요청 타임아웃 (초) |
 | `DATABASE_URL` | — | MySQL 연결 문자열 (`mysql+asyncmy://user:pw@host:3306/db?charset=utf8mb4`) |

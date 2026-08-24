@@ -11,8 +11,7 @@ from app.services import project_service
 
 
 async def create_session(db: AsyncSession, user_id: uuid.UUID, data: SessionCreate) -> Session:
-    # 프로젝트 소속으로 만들 때는 그 프로젝트가 내 것인지 먼저 확인한다
-    # (검증이 없으면 남의 프로젝트에 내 대화를 꽂아 넣을 수 있다)
+    # 남의 프로젝트에 내 대화를 꽂아 넣지 못하도록 소유권을 먼저 확인한다
     if data.project_id is not None:
         await project_service.get_project(db, data.project_id, user_id)
 

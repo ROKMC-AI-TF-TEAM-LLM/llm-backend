@@ -139,11 +139,23 @@ class FileTooLargeError(AppHTTPException):
     error_code = "FILE_TOO_LARGE"
     detail = "업로드할 파일 용량이 50MB를 초과하였습니다."
 
+
+class TextTooLongError(AppHTTPException):
+    status_code = 413
+    error_code = "TEXT_TOO_LONG"
+    detail = "번역할 원문이 길이 제한을 초과하였습니다."
+
 # 502
 class LLMServerError(AppHTTPException):
     status_code = 502
     error_code = "LLM_SERVER_ERROR"
     detail = "LLM 서버 오류가 발생했습니다."
+
+
+class TranslateServerError(AppHTTPException):
+    status_code = 502
+    error_code = "TRANSLATE_SERVER_ERROR"
+    detail = "번역 서버 오류가 발생했습니다."
 
 
 # 500

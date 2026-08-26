@@ -8,6 +8,9 @@ DB에 저장된 원본 content_type은 그대로 두고, 응답 스키마에서 
 """
 
 import re
+from typing import Annotated
+
+from pydantic import AfterValidator
 
 # (키워드 패턴, 확장자) — 위에서부터 첫 매치를 사용하므로 구체적인 것을 먼저 둔다.
 _EXT_PATTERNS: list[tuple[str, str]] = [
@@ -31,3 +34,8 @@ def to_extension(content_type: str | None) -> str | None:
         if re.search(pattern, content_type, re.IGNORECASE):
             return ext
     return content_type
+
+
+# 응답 스키마에서 content_type 필드에 쓰는 타입.
+# 이 타입으로 선언하면 값이 자동으로 확장자(.pdf 등)로 변환된다.
+ContentTypeExt = Annotated[str | None, AfterValidator(to_extension)]

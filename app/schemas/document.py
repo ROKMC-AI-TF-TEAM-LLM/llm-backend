@@ -1,8 +1,8 @@
 from datetime import datetime
 from uuid import UUID
-from pydantic import BaseModel, ConfigDict, field_validator
+from pydantic import BaseModel, ConfigDict
 
-from app.core.content_types import to_extension
+from app.core.content_types import ContentTypeExt
 
 
 class DocumentItem(BaseModel):
@@ -24,8 +24,7 @@ class AdminDocumentItem(BaseModel):
     document_id: UUID
     name: str
     # type은 MARS가 내려주는 값이라 여기엔 없음 (content_type만 보유)
-    # 표시용으로 확장자(.pdf 등)로 변환해 내려준다
-    content_type: str | None = None
+    content_type: ContentTypeExt = None
     domain: str | None = None
     visibility: str | None = None
     department: str | None = None
@@ -33,8 +32,6 @@ class AdminDocumentItem(BaseModel):
     created_at: datetime | None = None
     size: int | None = None
     user: UploaderItem | None = None
-
-    _to_ext = field_validator("content_type")(to_extension)
 
 
 class DocumentListResponse(BaseModel):

@@ -3,11 +3,13 @@ from datetime import datetime
 
 from pydantic import BaseModel
 
+from app.core.content_types import ContentTypeExt
+
 
 class ProjectDocumentItem(BaseModel):
     document_id: uuid.UUID
     name: str
-    content_type: str | None = None
+    content_type: ContentTypeExt = None
     size: int
     # 색인 상태: pending(적재 요청 전) | queued | running | done | error
     status: str
@@ -27,7 +29,7 @@ class ProjectDocumentListResponse(BaseModel):
 class ProjectDocumentUploadResponse(BaseModel):
     document_id: uuid.UUID
     name: str
-    content_type: str | None = None
+    content_type: ContentTypeExt = None
     size: int
     status: str
     created_at: datetime

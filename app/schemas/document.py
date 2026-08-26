@@ -2,6 +2,8 @@ from datetime import datetime
 from uuid import UUID
 from pydantic import BaseModel, ConfigDict
 
+from app.core.content_types import ContentTypeExt
+
 
 class DocumentItem(BaseModel):
     name: str
@@ -22,7 +24,7 @@ class AdminDocumentItem(BaseModel):
     document_id: UUID
     name: str
     # type은 MARS가 내려주는 값이라 여기엔 없음 (content_type만 보유)
-    content_type: str | None = None
+    content_type: ContentTypeExt = None
     domain: str | None = None
     visibility: str | None = None
     department: str | None = None

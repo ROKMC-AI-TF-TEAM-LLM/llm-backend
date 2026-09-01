@@ -8,7 +8,7 @@ Lang = Literal["ko", "en"]
 
 #: prompts/styles/*.yaml 에 있는 문체. 모르는 값은 번역 서버가 default로 떨어뜨리지만,
 #: 문서에 드러나지 않는 값을 받아두면 오타가 조용히 다른 문체로 번역된다.
-Style = Literal["press_release", "default"]
+Style = Literal["press_release", "default", "plain_report", "honorific"]
 
 
 class TranslateRequest(BaseModel):

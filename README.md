@@ -84,7 +84,7 @@ llm-backend/
 
 | Method | Path | 설명 | 인증 |
 |--------|------|------|------|
-| GET | `/api/v1/health` | 서버·DB·LLM 연결 상태 확인 | 불필요 |
+| GET | `/api/v1/health` | 서버·DB·LLM·번역 서버 연결 상태 확인 | 불필요 |
 | POST | `/api/v1/auth/signup` | 회원가입 (승인 대기 상태로 등록) | 불필요 |
 | POST | `/api/v1/auth/login` | 로그인 (승인된 계정만 가능) | 불필요 |
 | POST | `/api/v1/auth/refresh` | 액세스 토큰 재발급 | 불필요 |

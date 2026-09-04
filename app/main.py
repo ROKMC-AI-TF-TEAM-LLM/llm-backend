@@ -9,7 +9,7 @@ from app.api.v1.routes import admin, auth, capability, document, file, health, m
 from app.core.exceptions import AppHTTPException
 from app.core.logger import get_logger
 from app.schemas.common import ApiResponse
-from app.services.health_service import check_llm_server
+from app.services.health_service import check_llm_server, check_translation_server
 
 logger = get_logger(__name__)
 
@@ -25,6 +25,9 @@ async def lifespan(_app: FastAPI):
 
     llm_ok = await check_llm_server()
     logger.info("LLM 서버 연결 확인 완료") if llm_ok else None
+
+    translate_ok = await check_translation_server()
+    logger.info("번역 서버 연결 확인 완료") if translate_ok else None
     yield
 
 

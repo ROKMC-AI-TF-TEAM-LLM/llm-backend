@@ -246,6 +246,15 @@ async def upload_document(
         department: str | None,
         user_id: uuid.UUID | None,
 ) -> Document:
+    
+    limit_bytes = settings.max_document_size_mb * 1024 * 1024
+    if len(data) > limit_bytes:
+        logger.warning(
+            "업로드 용량 초과 name=%s size=%d", name, len(data)
+        )
+        raise FileTooLargeError(
+            detail=f"업로드 파일 용량 {settings.max_document_size_mb}MB 초과 (파일이름: {name})"
+        )
     doc = Document(
         name=name,
         domain=domain,

@@ -91,24 +91,6 @@ async def delete_document(name: str) -> dict:
         raise LLMServerError(detail="LLM 서버에 연결할 수 없습니다.")
 
 
-async def get_documents(offset: int, limit: int, domain: str | None = None) -> dict:
-    url = f"{settings.llm_server_url}/documents"
-    params: dict = {"offset": offset, "limit": limit}
-    if domain:
-        params["domain"] = domain
-    try:
-        async with httpx.AsyncClient(timeout=settings.request_timeout) as client:
-            response = await client.get(url, params=params)
-            response.raise_for_status()
-            return response.json()
-    except httpx.HTTPStatusError as e:
-        logger.error("문서 목록 조회 실패 status=%d url=%s", e.response.status_code, url)
-        raise LLMServerError(detail=f"LLM 서버 오류: HTTP {e.response.status_code}")
-    except Exception:
-        logger.error("LLM 서버 연결 오류 url=%s", url)
-        raise LLMServerError(detail="LLM 서버에 연결할 수 없습니다.")
-    
-
 async def upload_document(
         db: AsyncSession,
         name: str,
@@ -174,25 +156,17 @@ async def get_document_status(db: AsyncSession, document_id: uuid.UUID) -> Docum
     return doc
 
 
-async def get_admin_documents(
+async def _get_documents_page(
     db: AsyncSession,
+    filters: list,
     offset: int,
     limit: int,
-    domain: str | None = None,
-    search: str | None = None,
 ) -> tuple[list[Document], int, bool]:
-    # 1. 필터 조건을 먼저 만든다 (재사용할 거니까)
-    filters = []
-    if domain:
-        filters.append(Document.domain == domain)
-    if search:
-        filters.append(Document.name.ilike(f"%{search}%"))
-
-    # 2. total — 같은 필터로 개수만 세기
+    # total — 같은 필터로 개수만 세기
     count_query = select(func.count()).select_from(Document).where(*filters)
     total = await db.scalar(count_query)
 
-    # 3. 실제 목록 — 같은 필터 + offset/limit
+    # 실제 목록 — 같은 필터 + offset/limit
     list_query = (
         select(Document)
         .where(*filters)
@@ -203,10 +177,35 @@ async def get_admin_documents(
     result = await db.scalars(list_query)
     documents = list(result.all())
 
-    # 계산
     has_more = offset + len(documents) < total
-
     return documents, total, has_more
+
+
+async def get_documents(
+    db: AsyncSession,
+    offset: int,
+    limit: int,
+    domain: str | None = None,
+) -> tuple[list[Document], int, bool]:
+    filters = [Document.status == "done"]
+    if domain:
+        filters.append(Document.domain == domain)
+    return await _get_documents_page(db, filters, offset, limit)
+
+
+async def get_admin_documents(
+    db: AsyncSession,
+    offset: int,
+    limit: int,
+    domain: str | None = None,
+    search: str | None = None,
+) -> tuple[list[Document], int, bool]:
+    filters = []
+    if domain:
+        filters.append(Document.domain == domain)
+    if search:
+        filters.append(Document.name.ilike(f"%{search}%"))
+    return await _get_documents_page(db, filters, offset, limit)
 
 
 

@@ -491,7 +491,16 @@ python main.py
 # 운영 서버
 uvicorn app.main:app --host 0.0.0.0 --port 8000
 ```
+## DB 유저, 테이블 생성
+```SQL
+CREATE DATABASE llm_db
+  CHARACTER SET utf8mb4
+  COLLATE utf8mb4_unicode_ci;
 
+CREATE USER 'rokmcllm'@'localhost' IDENTIFIED BY '여기에_비밀번호';
+GRANT ALL PRIVILEGES ON llm_db.* TO 'rokmcllm'@'localhost';
+FLUSH PRIVILEGES;
+```
 ## DB 마이그레이션
 
 ```bash
@@ -515,7 +524,7 @@ alembic upgrade head
 | `MAX_DOCUMENT_SIZE_MB` | `50` | 업로드 문서(전사 문서·프로젝트 참고 파일) 크기 상한 (MB), AI 서버 상한과 동일하게 유지 |
 | `TRANSLATE_SERVER_URL` | `http://localhost:9001` | 번역 서버(NeuroDomain-Translate) 주소 |
 | `TRANSLATE_TIMEOUT` | `300` | 번역 요청 타임아웃 (초) |
-| `DATABASE_URL` | — | MySQL 연결 문자열 (`mysql+asyncmy://user:pw@host:3306/db?charset=utf8mb4`) |
+| `DATABASE_URL` | — | MySQL 연결 문자열 (`mysql+asyncmy://user:pw@;host:3306/db?charset=utf8mb4`) |
 | `JWT_SECRET_KEY` | — | JWT 서명 키 (반드시 환경변수로 설정) |
 | `JWT_ALGORITHM` | `HS256` | JWT 알고리즘 |
 | `ACCESS_TOKEN_EXPIRE_MINUTES` | `30` | 액세스 토큰 만료 시간 (분) |

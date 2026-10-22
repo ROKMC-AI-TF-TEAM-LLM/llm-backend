@@ -17,6 +17,7 @@ logger = get_logger(__name__)
 
 
 async def relay_document(
+        document_id: uuid.UUID,
         name: str,
         domain: str,
         visibility: str,
@@ -25,7 +26,12 @@ async def relay_document(
         project_id: str | None = None,
     ) -> dict:
     url = f"{settings.llm_server_url}/documents"
-    params: dict[str, str] = {"name": name, "domain": domain, "visibility": visibility}
+    params: dict[str, str] = {
+        "document_id": str(document_id),
+        "name": name,
+        "domain": domain,
+        "visibility": visibility,
+    }
     if department:
         params["department"] = department  # visibility=DEPT_ONLY일 때 조건부 필수
     if project_id:
@@ -90,6 +96,7 @@ async def submit_ingest(db: AsyncSession, doc: Document, data: bytes) -> Documen
     """
     try:
         relay = await relay_document(
+            document_id=doc.document_id,
             name=doc.name,
             domain=doc.domain,
             visibility=getattr(doc.visibility, "value", doc.visibility),

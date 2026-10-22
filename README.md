@@ -421,6 +421,10 @@ AI 응답에 참조한 문서 정보가 `sources` 배열로, 생성 문서가 `a
 
 관리자 문서(`POST /admin/documents`)와 프로젝트 참고 파일(`POST /projects/{id}/documents`)은 모두 업로드 즉시 202를 반환하고, 색인은 AI 서버(MARS)에서 비동기로 진행됩니다.
 
+백엔드는 DB에 문서를 저장한 뒤 AI 서버의 `POST /documents`에 `document_id` 쿼리 파라미터로 해당 문서의 UUID 문자열을 전달합니다. 관리자·프로젝트 업로드 및 재시도에 모두 적용되며, 재시도는 같은 문서 ID를 유지합니다. 기존 `name`·`domain`·`visibility`와 선택적 `department`·`project_id`, 바이너리 본문(`application/octet-stream`) 형식은 유지합니다. `job_id`는 AI 서버가 발급하는 개별 작업 ID입니다.
+
+AI 서버는 `document_id`를 수신하고 작업 정보와 청크 메타데이터에 보존하도록 지원해야 합니다. 이 백엔드 변경만으로 AI 서버 내부의 이름 기반 식별 방식이 전환되지는 않습니다. ID 기준 조회·삭제, 작업 이력 유실 시 복구, 부분 적재 처리는 후속 작업입니다.
+
 ```
 status 흐름: pending(적재 요청 전) → queued(대기) → running(색인 중) → done(완료) | error(실패)
 ```

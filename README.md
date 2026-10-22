@@ -389,7 +389,11 @@ AI 응답에 참조한 문서 정보가 `sources` 배열로, 생성 문서가 `a
 
 ## 문서 목록 응답
 
-`domain` 쿼리 파라미터로 도메인별 필터링이 가능합니다 (예: `?domain=MANUAL`). 전사 공용 문서만 반환하며, 프로젝트 참고 파일은 포함되지 않습니다.
+사용자 목록은 AI 서버의 벡터스토어 대신 DB의 `documents` 테이블을 조회합니다. `project_id IS NULL`이고 `status='done'`인 전사 공용 문서만 반환하며, 프로젝트 참고 파일은 포함되지 않습니다. 관리자 목록은 기존처럼 상태와 관계없이 전사 공용 문서를 조회합니다.
+
+`domain` 쿼리 파라미터로 도메인별 필터링이 가능합니다 (예: `?domain=MANUAL`). 목록과 `total`에 동일한 조건을 적용하고, `created_at` 내림차순(동일 시 `document_id` 내림차순)으로 정렬합니다. `total`은 필터를 적용한 전체 건수이고, `has_more`는 `offset + 반환 문서 수 < total`로 계산합니다.
+
+기존 응답 필드는 유지합니다. `owning_department`는 DB의 `department`이며, `type`과 `applied_at`은 DB에 같은 의미의 정보가 없어 `null`로 반환합니다. MIME인 `content_type`이나 등록 시각인 `created_at`으로 대체하지 않습니다.
 
 ```json
 // GET /api/v1/documents?offset=0&limit=20 응답 예시
@@ -397,11 +401,11 @@ AI 응답에 참조한 문서 정보가 `sources` 배열로, 생성 문서가 `a
   "documents": [
     {
       "name": "휴가규정.pdf",
-      "type": "PDF",
+      "type": null,
       "domain": "HR",
       "visibility": "ALL",
       "owning_department": "HR_TEAM",
-      "applied_at": "2026-07-05T19:09:47"
+      "applied_at": null
     }
   ],
   "total": 42,
@@ -412,6 +416,8 @@ AI 응답에 참조한 문서 정보가 `sources` 배열로, 생성 문서가 `a
 ```
 
 ## 문서 적재 · 색인 상태
+
+사용자 목록은 DB에 저장된 상태를 기준으로 하며, 조회 시 AI 서버의 상태를 갱신하지 않습니다. 실제 색인이 끝났어도 DB가 `queued`/`running`이면 목록에서 제외됩니다. 현재 상태 갱신은 아래 상태 조회 API가 수행하며, 상태 자동 동기화와 기존 DB·벡터스토어 데이터 불일치 처리는 별도 과제입니다.
 
 관리자 문서(`POST /admin/documents`)와 프로젝트 참고 파일(`POST /projects/{id}/documents`)은 모두 업로드 즉시 202를 반환하고, 색인은 AI 서버(MARS)에서 비동기로 진행됩니다.
 

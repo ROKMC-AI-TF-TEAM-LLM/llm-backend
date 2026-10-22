@@ -210,30 +210,33 @@ async def delete_all_project_documents(project_id: str) -> dict:
 
 
 async def get_documents(
+    db: AsyncSession,
     offset: int,
     limit: int,
     domain: str | None = None,
-    project_id: str | None = None,
-) -> dict:
-    url = f"{settings.llm_server_url}/documents"
-    params: dict = {"offset": offset, "limit": limit}
+) -> tuple[list[Document], int, bool]:
+    """DB에 색인 완료로 기록된 전사 공용 문서만 사용자에게 반환한다."""
+    filters = [Document.project_id.is_(None), Document.status == "done"]
     if domain:
-        params["domain"] = domain
-    # ""(빈 문자열)은 "전사 공용만"이라는 의미가 있으므로 None과 구분해야 한다.
-    # `if project_id:`로 쓰면 빈 문자열이 걸러져 프로젝트 문서까지 함께 반환된다
-    if project_id is not None:
-        params["project_id"] = project_id
-    try:
-        async with httpx.AsyncClient(timeout=settings.request_timeout) as client:
-            response = await client.get(url, params=params)
-            response.raise_for_status()
-            return response.json()
-    except httpx.HTTPStatusError as e:
-        logger.error("문서 목록 조회 실패 status=%d url=%s", e.response.status_code, url)
-        raise LLMServerError(detail=f"LLM 서버 오류: HTTP {e.response.status_code}")
-    except Exception:
-        logger.error("LLM 서버 연결 오류 url=%s", url)
-        raise LLMServerError(detail="LLM 서버에 연결할 수 없습니다.")
+        filters.append(Document.domain == domain)
+
+    count_query = select(func.count()).select_from(Document).where(*filters)
+    total = await db.scalar(count_query)
+
+    list_query = (
+        select(Document)
+        .options(load_only(
+            Document.name, Document.domain, Document.visibility, Document.department
+        ))
+        .where(*filters)
+        .order_by(Document.created_at.desc(), Document.document_id.desc())
+        .offset(offset)
+        .limit(limit)
+    )
+    result = await db.scalars(list_query)
+    documents = list(result.all())
+    has_more = offset + len(documents) < total
+    return documents, total, has_more
 
 
 async def upload_document(

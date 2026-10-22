@@ -6,10 +6,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
 from app.core.deps import get_current_user
-from app.core.responses import R_401, R_404_DOCUMENT, R_502_LLM
+from app.core.responses import R_401, R_404_DOCUMENT
 from app.models.user import User
 from app.schemas.common import ApiResponse
-from app.schemas.document import DocumentListResponse
+from app.schemas.document import DocumentItem, DocumentListResponse
 from app.services import document_service
 
 router = APIRouter(prefix="/documents", tags=["documents"])
@@ -20,27 +20,42 @@ router = APIRouter(prefix="/documents", tags=["documents"])
     response_model=ApiResponse[DocumentListResponse],
     summary="문서 목록 조회",
     description=(
-        "RAG 벡터스토어에 인덱싱된 문서 목록을 반환합니다. offset 기반 무한 스크롤을 지원합니다.\n\n"
+        "DB에 색인 완료(`done`)로 기록된 전사 공용 문서 목록을 반환합니다. "
+        "등록일 내림차순(동일 시 문서 ID 내림차순)으로 정렬하며, offset 기반 무한 스크롤을 지원합니다.\n\n"
         "- 첫 요청: `offset=0`으로 시작\n"
         "- 다음 페이지: `offset += limit`으로 증가\n"
         "- 응답의 `has_more`가 false이면 마지막 페이지\n"
+        "- `type`, `applied_at`은 DB에 대응하는 정보가 없어 null로 반환합니다\n"
         "- `domain`으로 도메인 필터링 가능 (예: `MANUAL`). 사용 가능 값은 `GET /capabilities` 참조\n"
         "- **전사 공용 문서만** 반환합니다. 프로젝트 참고 파일은 "
         "`GET /projects/{project_id}/documents`로 조회하세요"
     ),
-    responses={**R_401, **R_502_LLM},
+    responses={**R_401},
 )
 async def get_documents(
     offset: int = Query(0, ge=0, description="조회 시작 위치"),
     limit: int = Query(20, ge=1, le=100, description="한 번에 가져올 문서 수"),
     domain: str | None = Query(None, description="도메인 필터 (예: HR, MANUAL)"),
     _: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
 ):
-    # 로그인만 하면 누구나 부를 수 있는 목록이라 전사 공용으로 범위를 고정한다.
-    # ""은 AI 서버에서 "프로젝트에 속하지 않은 문서만"이라는 뜻이며, 생략하면 전부
-    # 반환되어 **다른 사용자의 개인 파일명·용량이 그대로 노출된다** (I-09와 같은 부류)
-    data = await document_service.get_documents(
-        offset=offset, limit=limit, domain=domain, project_id=""
+    documents, total, has_more = await document_service.get_documents(
+        db, offset=offset, limit=limit, domain=domain
+    )
+    data = DocumentListResponse(
+        documents=[
+            DocumentItem(
+                name=doc.name,
+                domain=doc.domain,
+                visibility=doc.visibility,
+                owning_department=doc.department,
+            )
+            for doc in documents
+        ],
+        total=total,
+        offset=offset,
+        limit=limit,
+        has_more=has_more,
     )
     return ApiResponse.ok(data, status_code=200)
 

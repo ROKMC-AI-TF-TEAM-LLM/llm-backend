@@ -225,3 +225,8 @@ my_docs/
 /airgap/venv-airgap/
 /airgap/VC_redist.x64.exe
 /airgap/*.log
+
+#기타
+node_modules/
+package-lock.json
+package.json

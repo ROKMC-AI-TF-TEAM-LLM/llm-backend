@@ -1,3 +1,4 @@
+import ssl
 from datetime import datetime, timezone
 
 from sqlalchemy import DateTime, TypeDecorator
@@ -8,11 +9,17 @@ from sqlalchemy.orm import DeclarativeBase
 
 from app.core.config import settings
 
+# TODO: 배포 전 CA 인증서 검증 활성화 (현재 Aiven 자체 CA 미검증)
+_ssl_ctx = ssl.create_default_context()
+_ssl_ctx.check_hostname = False
+_ssl_ctx.verify_mode = ssl.CERT_NONE
+
 engine = create_async_engine(
     settings.database_url,
     echo=False,
     pool_recycle=3600,
     pool_pre_ping=True,
+    connect_args={"ssl": _ssl_ctx},
 )
 
 AsyncSessionLocal = async_sessionmaker(

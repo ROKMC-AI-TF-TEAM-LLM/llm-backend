@@ -29,6 +29,17 @@ logger = get_logger(__name__)
 _FILE_LINK_RE = re.compile(r"/files/([^\s\"'<>()\[\]]+)")
 
 
+def _parse_document_id(value) -> uuid.UUID | None:
+    # 형식이 틀린 id 때문에 답변 저장 전체가 실패하면 안 되므로 버리고 NULL로 둔다
+    if not value:
+        return None
+    try:
+        return uuid.UUID(str(value))
+    except ValueError:
+        logger.warning("출처 document_id 형식 오류 value=%r", value)
+        return None
+
+
 async def _collect_attachments(
     answer: str, extra_names: list[str] | None = None
 ) -> tuple[str, list[Attachment], list[dict]]:
@@ -171,6 +182,7 @@ async def _save_ai_message(
         db.add(Source(
             message_id=ai_message.message_id,
             name=item.get("name", ""),
+            document_id=_parse_document_id(item.get("document_id")),
             page=item.get("page"),
         ))
 

@@ -125,7 +125,7 @@ async def submit_ingest(db: AsyncSession, doc: Document, data: bytes) -> Documen
 async def retry_ingest(db: AsyncSession, doc: Document, data: bytes) -> Document:
     """실패한 문서의 색인을 같은 원본으로 다시 요청한다 (관리자·프로젝트 공용).
 
-    MARS는 같은 name을 다시 받으면 기존 청크를 지우고 재적재하므로, 색인이 이미
+    MARS는 같은 document_id를 다시 받으면 기존 청크를 지우고 재적재하므로, 색인이 이미
     끝난 문서를 오판해 재시도해도 중복 적재가 되지는 않는다. 그래도 진행 중인
     작업은 막는다 — 위 RETRYABLE_STATUSES 주석 참조.
 
@@ -167,17 +167,17 @@ async def get_job(job_id: str) -> dict | None:
         raise LLMServerError(detail="LLM 서버에 연결할 수 없습니다.")
 
 
-async def delete_document(name: str, project_id: str) -> dict:
-    url = f"{settings.llm_server_url}/documents/{quote(name)}"
+async def delete_document(document_id: uuid.UUID) -> dict:
+    url = f"{settings.llm_server_url}/documents/{document_id}"
     try:
         async with httpx.AsyncClient(timeout=settings.request_timeout) as client:
-            response = await client.delete(url, params={"project_id":project_id})
+            response = await client.delete(url)
             response.raise_for_status()
             return response.json()
     except httpx.HTTPStatusError as e:
         status= e.response.status_code
         if status == 404:
-            logger.error("존재 하지 않는 문서 status=%d name=%s",status,name)
+            logger.error("존재 하지 않는 문서 status=%d document_id=%s",status,document_id)
             raise DocumentNotFoundError(detail="존재하지 않는 문서입니다.")
         if status == 409:
             logger.error("다른 적재/삭제 작업 진행 중 status=%d",status)
@@ -417,7 +417,7 @@ async def delete_document_admin(db: AsyncSession, document_id: uuid.UUID) -> Doc
         raise DocumentNotFoundError()
 
     try:
-        result = await delete_document(doc.name, doc.project_id)
+        result = await delete_document(doc.document_id)
         deleted_chunks = result["deleted_chunks"]
     except DocumentNotFoundError:
         # MARS에 이미 없음(색인 실패했거나 이미 지워짐) → 목표(MARS에 청크 없음)는 이미 달성 → 멱등 처리

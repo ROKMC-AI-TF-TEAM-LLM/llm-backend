@@ -168,7 +168,8 @@ async def get_job(job_id: str) -> dict | None:
 
 
 async def delete_document(document_id: uuid.UUID) -> dict:
-    url = f"{settings.llm_server_url}/documents/{document_id}"
+    # /documents/{name}은 이름 기준 삭제라 UUID를 넣으면 항상 404가 난다
+    url = f"{settings.llm_server_url}/documents/by-id/{document_id}"
     try:
         async with httpx.AsyncClient(timeout=settings.request_timeout) as client:
             response = await client.delete(url)

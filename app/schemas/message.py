@@ -19,6 +19,7 @@ class RegenerateRequest(BaseModel):
 
 class SourceResponse(BaseModel):
     name: str
+    document_id: uuid.UUID | None = None
     page: str | None
 
     model_config = {"from_attributes": True}

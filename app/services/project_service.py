@@ -331,7 +331,7 @@ async def delete_project_document(
 
     # 적재를 요청한 적 있는 문서만 MARS를 건드린다 (실패해 job_id가 없으면 청크도 없다)
     if doc.job_id is not None:
-        await document_service.delete_document(doc.name, doc.project_id)
+        await document_service.delete_document(doc.document_id)
 
     await db.delete(doc)
     await db.commit()

@@ -540,6 +540,8 @@ alembic upgrade head
 | `ACCESS_TOKEN_EXPIRE_MINUTES` | `30` | 액세스 토큰 만료 시간 (분) |
 | `REFRESH_TOKEN_EXPIRE_DAYS` | `7` | 리프레시 토큰 만료 시간 (일) |
 | `LOG_LEVEL` | `INFO` | 로그 레벨 (`DEBUG`, `INFO`, `WARNING`) |
+| `LOG_DIR` | `logs` | 로그 파일 폴더. 콘솔과 같은 내용이 `app.log`에 저장됨 |
+| `LOG_RETENTION_DAYS` | `30` | 로그 보관 일수. 자정마다 `app.log.YYYY-MM-DD`로 넘기고 초과분은 삭제 |
 
 > 번역 API(`POST /api/v1/translate`)는 번역 서버가 별도 프로세스로 떠 있어야 동작합니다.
 > 채팅용 AI 서버(`LLM_SERVER_URL`)와 다른 서버이며, 기본 포트는 9001입니다.

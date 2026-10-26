@@ -1,3 +1,4 @@
+import uuid
 from urllib.parse import quote
 
 from fastapi import APIRouter, Depends, Query
@@ -45,6 +46,7 @@ async def get_documents(
     data = DocumentListResponse(
         documents=[
             DocumentItem(
+                document_id=doc.document_id,
                 name=doc.name,
                 domain=doc.domain,
                 visibility=doc.visibility,
@@ -61,22 +63,22 @@ async def get_documents(
 
 
 @router.get(
-    "/{name}/download",
+    "/{document_id}/download",
     summary="원본 문서 다운로드",
     description=(
-        "미들웨어 DB에 보관된 원본 문서 파일을 문서명(name)으로 조회해 다운로드합니다.\n\n"
-        "- `name`: 문서명 그대로 전달 (한글·공백은 URL 인코딩, 예: `/documents/%ED%9C%B4%EA%B0%80%EA%B7%9C%EC%A0%95.pdf/download`)\n"
-        "- 같은 이름의 문서가 여러 건이면 가장 최근 등록본을 반환합니다\n"
+        "document_id로 원본 문서 파일을 다운로드합니다. 같은 이름의 문서가 여러 건이어도 "
+        "정확히 해당 문서를 반환합니다.\n\n"
+        "- **전사 공용 문서만** 받을 수 있습니다. 프로젝트 참고 파일과 삭제된 문서는 404를 반환합니다\n"
         "- 인증 헤더가 필요하므로 프론트는 fetch → blob 방식으로 다운로드해야 합니다"
     ),
     responses={**R_401, **R_404_DOCUMENT},
 )
 async def download_document(
-    name: str,
+    document_id: uuid.UUID,
     _: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    doc = await document_service.get_document_file(db, name)
+    doc = await document_service.get_document_file(db, document_id)
     return Response(
         content=doc.data,
         media_type=doc.content_type,
@@ -85,5 +87,3 @@ async def download_document(
             "Content-Length": str(doc.size),
         },
     )
-
-

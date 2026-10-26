@@ -107,6 +107,7 @@ class DocumentListTests(unittest.IsolatedAsyncioTestCase):
             ["tech.pdf", "hr-new.pdf", "hr-tie.pdf", "hr-old.pdf"],
         )
         self.assertEqual(page["documents"][1], {
+            "document_id": str(UUID(int=3)),
             "name": "hr-new.pdf",
             "type": None,
             "domain": "HR",
@@ -183,6 +184,74 @@ class DocumentListTests(unittest.IsolatedAsyncioTestCase):
     async def test_missing_authentication_is_rejected(self):
         del app.dependency_overrides[get_current_user]
         response = await self.client.get("/api/v1/documents")
+        self.assertEqual(response.status_code, 401)
+
+    async def add_other_users_project_document(self, name: str) -> UUID:
+        other = User(
+            user_id=UUID(int=101), name="Other", email="other@example.com", password="unused"
+        )
+        async with self.sessions() as db:
+            db.add(other)
+            await db.flush()
+            db.add(Project(project_id=UUID(int=201), user_id=other.user_id, title="Other"))
+            await db.flush()
+            db.add(Document(
+                document_id=UUID(int=10),
+                name=name,
+                domain="HR",
+                status="done",
+                project_id=UUID(int=201),
+                user_id=other.user_id,
+                content_type="application/pdf",
+                data=b"other user's bytes",
+                size=18,
+            ))
+            await db.commit()
+        return UUID(int=10)
+
+    async def test_download_by_id_access_rules(self):
+        other_id = await self.add_other_users_project_document("other.pdf")
+        for document_id, expected in [
+            (UUID(int=9), 404),      # 내 프로젝트 참고 파일도 전사 다운로드 대상이 아니다
+            (UUID(int=8), 200),      # 전사 문서는 색인 상태와 무관하게 조회
+            (other_id, 404),         # 남의 프로젝트 파일은 존재도 숨긴다
+            (UUID(int=999), 404),    # 삭제됐거나 없는 문서
+        ]:
+            with self.subTest(document_id=document_id):
+                response = await self.client.get(f"/api/v1/documents/{document_id}/download")
+                self.assertEqual(response.status_code, expected)
+
+    async def test_download_by_id_picks_exact_document_among_same_names(self):
+        async with self.sessions() as db:
+            db.add(Document(
+                document_id=UUID(int=11),
+                name="hr-old.pdf",
+                domain="HR",
+                status="done",
+                user_id=self.user.user_id,
+                content_type="application/pdf",
+                data=b"newer same-name bytes",
+                size=21,
+                created_at=datetime(2026, 10, 30, tzinfo=timezone.utc),
+            ))
+            await db.commit()
+
+        for document_id, expected in [
+            (UUID(int=1), b"private original bytes"),
+            (UUID(int=11), b"newer same-name bytes"),
+        ]:
+            with self.subTest(document_id=document_id):
+                response = await self.client.get(f"/api/v1/documents/{document_id}/download")
+                self.assertEqual(response.status_code, 200)
+                self.assertEqual(response.content, expected)
+
+    async def test_download_by_name_is_gone(self):
+        response = await self.client.get("/api/v1/documents/hr-old.pdf/download")
+        self.assertEqual(response.status_code, 422)
+
+    async def test_download_by_id_requires_authentication(self):
+        del app.dependency_overrides[get_current_user]
+        response = await self.client.get(f"/api/v1/documents/{UUID(int=3)}/download")
         self.assertEqual(response.status_code, 401)
 
 

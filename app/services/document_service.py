@@ -10,6 +10,7 @@ from urllib.parse import quote
 from app.models.document import Document
 from app.models.user import User
 from app.schemas.document import DocumentDeleteResponse
+from app.services.llm_client import llm_server_client
 import uuid
 
 
@@ -40,7 +41,7 @@ async def relay_document(
         # 처리하면 프로젝트 전용 문서가 전사 공용으로 영구히 남기 때문이다
         params["project_id"] = project_id
     try:
-        async with httpx.AsyncClient(timeout=settings.request_timeout) as client:
+        async with llm_server_client(settings.request_timeout) as client:
             response = await client.post(
                 url,
                 params=params,
@@ -151,7 +152,7 @@ async def get_job(job_id: str) -> dict | None:
     url = f"{settings.llm_server_url}/documents/jobs/{job_id}"
 
     try:
-        async with httpx.AsyncClient(timeout=settings.request_timeout) as client:
+        async with llm_server_client(settings.request_timeout) as client:
             response = await client.get(url)
             response.raise_for_status()
             return response.json()
@@ -171,7 +172,7 @@ async def delete_document(document_id: uuid.UUID) -> dict:
     # /documents/{name}은 이름 기준 삭제라 UUID를 넣으면 항상 404가 난다
     url = f"{settings.llm_server_url}/documents/by-id/{document_id}"
     try:
-        async with httpx.AsyncClient(timeout=settings.request_timeout) as client:
+        async with llm_server_client(settings.request_timeout) as client:
             response = await client.delete(url)
             response.raise_for_status()
             return response.json()
@@ -198,7 +199,7 @@ async def delete_all_project_documents(project_id: str) -> dict:
     """
     url = f"{settings.llm_server_url}/projects/{quote(project_id)}"
     try:
-        async with httpx.AsyncClient(timeout=settings.request_timeout) as client:
+        async with llm_server_client(settings.request_timeout) as client:
             response = await client.delete(url)
             response.raise_for_status()
             return response.json()

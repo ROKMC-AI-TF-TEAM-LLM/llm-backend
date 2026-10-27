@@ -4,6 +4,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
 from app.core.logger import get_logger
+from app.services.llm_client import llm_server_client
 
 logger = get_logger(__name__)
 
@@ -20,7 +21,7 @@ async def check_db(db: AsyncSession) -> bool:
 async def check_llm_server() -> bool:
     url = f"{settings.llm_server_url}/health?deep=true"
     try:
-        async with httpx.AsyncClient(timeout=25) as client:
+        async with llm_server_client(25) as client:
             res = await client.get(url)
             res.raise_for_status()
             status = res.json().get("status")

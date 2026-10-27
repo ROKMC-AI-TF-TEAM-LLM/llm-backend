@@ -9,11 +9,22 @@ from app.core.logger import get_logger
 logger = get_logger(__name__)
 
 
+def llm_server_client(timeout: float | httpx.Timeout) -> httpx.AsyncClient:
+    """MARS 호출용 클라이언트. 모든 요청에 내부 인증 헤더를 싣는다.
+
+    MARS 호출은 반드시 이 함수로 만든다 — 호출부마다 헤더를 붙이면 새 호출에서 빠뜨린다.
+    """
+    return httpx.AsyncClient(
+        timeout=timeout,
+        headers={"X-Internal-Token": settings.llm_server_token},
+    )
+
+
 async def download_file(name: str) -> tuple[bytes, str] | None:
     """AI 서버가 생성한 문서 파일을 내려받는다. 실패 시 None (스트림을 막지 않기 위해 예외를 던지지 않음)."""
     url = f"{settings.llm_server_url}/files/{quote(name)}"
     try:
-        async with httpx.AsyncClient(timeout=settings.request_timeout) as client:
+        async with llm_server_client(settings.request_timeout) as client:
             res = await client.get(url)
             res.raise_for_status()
             content_type = res.headers.get("content-type", "application/octet-stream")
@@ -47,7 +58,7 @@ async def stream_chat(
         payload["project_instructions"] = project_instructions
 
     timeout = httpx.Timeout(connect=settings.request_timeout, read=None, write=None, pool=None)
-    async with httpx.AsyncClient(timeout=timeout) as client:
+    async with llm_server_client(timeout) as client:
         async with client.stream(
             "POST",
             f"{settings.llm_server_url}/query",

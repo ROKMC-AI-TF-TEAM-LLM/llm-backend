@@ -3,6 +3,9 @@ from pydantic_settings import BaseSettings
 
 class Settings(BaseSettings):
     llm_server_url: str = "http://localhost:8001"
+    # MARS 내부 호출 인증 토큰. 모든 MARS 요청에 X-Internal-Token 헤더로 싣는다.
+    # 기본값이 없어 미설정 시 기동 단계에서 실패한다 (누락된 채 떠서 전 요청이 거부되는 것을 막음)
+    llm_server_token: str
     request_timeout: int = 60
     max_attachment_size_mb: int = 20
     # AI 서버(MARS) 상한과 동일하게 맞춰 여기서 먼저 거부한다 (안 그러면 거부될 파일이 DB에 저장된 뒤 버려짐)

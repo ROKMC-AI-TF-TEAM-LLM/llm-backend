@@ -3,6 +3,7 @@ import httpx
 from app.core.config import settings
 from app.core.exceptions import LLMServerError
 from app.core.logger import get_logger
+from app.services.llm_client import llm_server_client
 
 logger = get_logger(__name__)
 
@@ -10,7 +11,7 @@ logger = get_logger(__name__)
 async def get_capabilities() -> dict:
     url = f"{settings.llm_server_url}/capabilities"
     try:
-        async with httpx.AsyncClient(timeout=settings.request_timeout) as client:
+        async with llm_server_client(settings.request_timeout) as client:
             response = await client.get(url)
             response.raise_for_status()
             return response.json()

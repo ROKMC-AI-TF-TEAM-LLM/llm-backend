@@ -5,9 +5,11 @@ from fastapi import APIRouter, Depends, Query
 from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.config import settings
 from app.core.database import get_db
 from app.core.deps import get_current_user
 from app.core.responses import R_400_MESSAGE_ROLE, R_401, R_403_SESSION, R_404_MESSAGE, R_404_SESSION, R_422
+from app.core.sse import with_heartbeat
 from app.models.user import User
 from app.schemas.common import ApiResponse
 from app.schemas.message import ChatRequest, MessagePageResponse, MessageResponse, RegenerateRequest
@@ -71,6 +73,8 @@ async def get_messages(
         "status* → text* → notice? → sources → files? → done\n"
         "```\n"
         "`done`이 항상 마지막입니다. 클라이언트는 **모르는 `type`을 무시**하도록 구현하세요 (향후 확장 대비).\n\n"
+        "**하트비트** — 이벤트가 15초 이상 없으면 연결 유지용 SSE 주석 라인 `: ping`이 옵니다. "
+        "`data:`로 시작하지 않는 줄이므로 무시하면 됩니다.\n\n"
         "**이벤트 타입**\n"
         "- `{\"type\": \"status\", \"stage\": \"...\", \"message\": \"...\", \"thought\": \"...\", \"step\": 1}`: "
         "진행 상태. `thought`·`step`은 AI 서버가 추론 근거를 함께 보낼 때만 포함\n"
@@ -95,9 +99,12 @@ async def chat_stream(
     db: AsyncSession = Depends(get_db),
 ):
     return StreamingResponse(
-        message_service.chat_stream(
-            db, session_id, current_user.user_id, body.question,
-            domain=body.domain, tool=body.tool,
+        with_heartbeat(
+            message_service.chat_stream(
+                db, session_id, current_user.user_id, body.question,
+                domain=body.domain, tool=body.tool,
+            ),
+            settings.sse_heartbeat_interval,
         ),
         media_type="text/event-stream",
     )
@@ -142,10 +149,13 @@ async def regenerate_stream(
     db: AsyncSession = Depends(get_db),
 ):
     return StreamingResponse(
-        message_service.regenerate_stream(
-            db, session_id, message_id, current_user.user_id,
-            domain=body.domain if body else None,
-            tool=body.tool if body else None,
+        with_heartbeat(
+            message_service.regenerate_stream(
+                db, session_id, message_id, current_user.user_id,
+                domain=body.domain if body else None,
+                tool=body.tool if body else None,
+            ),
+            settings.sse_heartbeat_interval,
         ),
         media_type="text/event-stream",
     )

@@ -33,6 +33,12 @@ class TokenInvalidError(AppHTTPException):
     detail = "유효하지 않은 토큰입니다."
 
 
+class SessionReplacedError(AppHTTPException):
+    status_code = 401
+    error_code = "SESSION_REPLACED"
+    detail = "다른 기기에서 로그인되어 로그아웃되었습니다."
+
+
 class ForbiddenError(AppHTTPException):
     status_code = 403
     error_code = "FORBIDDEN"

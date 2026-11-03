@@ -33,6 +33,8 @@ class User(Base):
         Enum(ApprovalStatus), nullable=False, default=ApprovalStatus.pending
     )
     refresh_token: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    # 마지막 로그인에서 발급한 세션 번호. 토큰의 sid와 다르면 다른 기기에서 다시 로그인한 것
+    current_sid: Mapped[str | None] = mapped_column(String(32), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         Timestamp,
         default=lambda: datetime.now(timezone.utc),

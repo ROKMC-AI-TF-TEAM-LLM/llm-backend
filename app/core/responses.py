@@ -22,6 +22,7 @@ R_401 = {
         "인증 실패",
         no_token=_ex(401, "UNAUTHORIZED", "Unauthorized"),
         token_invalid=_ex(401, "TOKEN_INVALID", "유효하지 않은 토큰입니다."),
+        session_replaced=_ex(401, "SESSION_REPLACED", "다른 기기에서 로그인되어 로그아웃되었습니다."),
     )
 }
 
@@ -36,6 +37,7 @@ R_401_TOKEN = {
     401: _resp(
         "토큰 오류",
         token_invalid=_ex(401, "TOKEN_INVALID", "유효하지 않은 토큰입니다."),
+        session_replaced=_ex(401, "SESSION_REPLACED", "다른 기기에서 로그인되어 로그아웃되었습니다."),
     )
 }
 

@@ -18,11 +18,13 @@ async def get_current_user(
 ) -> User:
     if not credentials:
         raise UnauthorizedError()
-    user_id = auth_service.decode_token(credentials.credentials, expected_type="access")
+    user_id, sid = auth_service.decode_token(credentials.credentials, expected_type="access")
     try:
-        return await user_service.get_user(db, uuid.UUID(user_id))
+        user = await user_service.get_user(db, uuid.UUID(user_id))
     except Exception:
         raise TokenInvalidError()
+    auth_service.ensure_current_session(user, sid)
+    return user
 
 
 async def get_current_admin(

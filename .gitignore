@@ -225,3 +225,6 @@ my_docs/
 /airgap/venv-airgap/
 /airgap/VC_redist.x64.exe
 /airgap/*.log
+
+# Log files (rotated daily: app.log, app.log.YYYY-MM-DD)
+/logs/

@@ -7,10 +7,14 @@ from fastapi.responses import JSONResponse
 
 from app.api.v1.routes import admin, auth, capability, document, file, health, message, project, session, translation, user
 from app.core.exceptions import AppHTTPException
-from app.core.logger import get_logger
+from app.core.logger import get_logger, setup_logging
+from app.core.request_logging import RequestLogMiddleware
 from app.schemas.common import ApiResponse
 from app.services.health_service import check_llm_server, check_translation_server
 
+# uvicorn이 앱을 불러오는 시점에 실행된다 — uvicorn 자체 로그 설정이 끝난 뒤라 덮어쓸 수 있고,
+# "Started server process" 등 이후 기동 로그도 같은 형식으로 남는다
+setup_logging()
 logger = get_logger(__name__)
 
 
@@ -41,6 +45,8 @@ app.add_middleware(
     allow_headers=["*"],
     expose_headers=["*"],
 )
+# 나중에 추가한 미들웨어가 바깥쪽에 놓인다 — CORS보다 먼저 받아야 preflight 등 모든 요청이 기록된다
+app.add_middleware(RequestLogMiddleware)
 
 
 @app.exception_handler(AppHTTPException)

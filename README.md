@@ -114,7 +114,7 @@ llm-backend/
 | POST | `/api/v1/projects/{id}/documents/{doc_id}/retry` | 참고 파일 색인 재시도 (202) | 필요 |
 | DELETE | `/api/v1/projects/{id}/documents/{doc_id}` | 프로젝트 참고 파일 삭제 | 필요 |
 | GET | `/api/v1/documents` | 전사 공용 문서 목록 (offset 기반, `domain` 필터) | 필요 |
-| GET | `/api/v1/documents/{name}/download` | 원본 문서 다운로드 (문서명 조회, 최신본) | 필요 |
+| GET | `/api/v1/documents/{document_id}/download` | 원본 문서 다운로드 (document_id 기준) | 필요 |
 | GET | `/api/v1/capabilities` | 채팅에 사용 가능한 domain·tool 목록 | 필요 |
 | GET | `/api/v1/files/{attachment_id}` | AI 생성 문서(HWPX 등) 다운로드 | 필요 |
 | GET | `/api/v1/admin/users` | 전체 회원 목록 (cursor 기반, 필터/검색) | 관리자 |
@@ -393,13 +393,14 @@ AI 응답에 참조한 문서 정보가 `sources` 배열로, 생성 문서가 `a
 
 `domain` 쿼리 파라미터로 도메인별 필터링이 가능합니다 (예: `?domain=MANUAL`). 목록과 `total`에 동일한 조건을 적용하고, `created_at` 내림차순(동일 시 `document_id` 내림차순)으로 정렬합니다. `total`은 필터를 적용한 전체 건수이고, `has_more`는 `offset + 반환 문서 수 < total`로 계산합니다.
 
-기존 응답 필드는 유지합니다. `owning_department`는 DB의 `department`이며, `type`과 `applied_at`은 DB에 같은 의미의 정보가 없어 `null`로 반환합니다. MIME인 `content_type`이나 등록 시각인 `created_at`으로 대체하지 않습니다.
+기존 응답 필드는 유지하고 `document_id`를 추가했습니다. 문서 식별에는 이름 대신 `document_id`를 사용하세요. `owning_department`는 DB의 `department`이며, `type`과 `applied_at`은 DB에 같은 의미의 정보가 없어 `null`로 반환합니다. MIME인 `content_type`이나 등록 시각인 `created_at`으로 대체하지 않습니다.
 
 ```json
 // GET /api/v1/documents?offset=0&limit=20 응답 예시
 {
   "documents": [
     {
+      "document_id": "3f2b8c1e-5d4a-4e9b-9c7a-1b2c3d4e5f60",
       "name": "휴가규정.pdf",
       "type": null,
       "domain": "HR",
@@ -414,6 +415,13 @@ AI 응답에 참조한 문서 정보가 `sources` 배열로, 생성 문서가 `a
   "has_more": true
 }
 ```
+
+## 원본 다운로드 (document_id)
+
+`GET /api/v1/documents/{document_id}/download`는 목록이나 채팅 출처(`sources[].document_id`)의 id로 원본 파일을 받습니다. 같은 이름의 문서가 여러 건이어도 해당 문서만 반환합니다.
+
+- **전사 공용 문서만** 받을 수 있습니다. 프로젝트 참고 파일과 삭제된 문서는 404입니다.
+- 문서명 기준 다운로드(`GET /api/v1/documents/{name}/download`)는 제거했습니다. 같은 이름의 문서를 구분할 수 없기 때문입니다. `document_id`가 없는 예전 출처는 목록에서 이름으로 문서를 찾은 뒤 그 `document_id`로 받으세요.
 
 ## 문서 적재 · 색인 상태
 

@@ -384,20 +384,18 @@ async def get_admin_documents(
 
 
 
-async def get_document_file(db: AsyncSession, name: str) -> Document:
-    """원본 문서를 문서명으로 조회한다 (바이너리 포함).
+async def get_document_file(db: AsyncSession, document_id: uuid.UUID) -> Document:
+    """원본 문서를 id로 조회한다 (바이너리 포함).
 
-    name은 unique 제약이 없으므로, 같은 이름이 여러 건이면 가장 최근 등록본을 반환한다.
+    id로 찾으므로 같은 이름의 문서가 여러 건이어도 정확히 그 문서를 반환한다.
 
     [전사 문서 전용] project_id가 있는 프로젝트 참고 파일은 대상에서 제외한다.
-    이 조회에는 소유자 조건이 없어(문서명만으로 찾는다) 프로젝트 파일이 섞이면
-    다른 사용자가 파일명만으로 남의 개인 파일을 내려받을 수 있다. I-09 참조.
+    이 조회에는 소유자 조건이 없어 프로젝트 파일이 섞이면 다른 사용자가 id만으로
+    남의 개인 파일을 내려받을 수 있다. I-09 참조.
     """
     doc = await db.scalar(
         select(Document)
-        .where(Document.name == name, Document.project_id.is_(None))
-        .order_by(Document.created_at.desc())
-        .limit(1)
+        .where(Document.document_id == document_id, Document.project_id.is_(None))
         .options(undefer(Document.data))
     )
     if doc is None:

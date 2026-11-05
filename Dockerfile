@@ -26,6 +26,8 @@ COPY app ./app
 COPY alembic ./alembic
 COPY alembic.ini .
 
+RUN mkdir -p /app/logs && chown app:app /app/logs
+
 USER app
 EXPOSE 8080
 

@@ -4,6 +4,8 @@ from pydantic_settings import BaseSettings
 class Settings(BaseSettings):
     llm_server_url: str = "http://localhost:8001"
     request_timeout: int = 60
+    # 채팅 SSE 하트비트 간격(초). Vercel 프록시가 120초 무응답이면 끊으므로 그보다 충분히 짧게 둔다
+    sse_heartbeat_interval: int = 15
     max_attachment_size_mb: int = 20
     # AI 서버(MARS) 상한과 동일하게 맞춰 여기서 먼저 거부한다 (안 그러면 거부될 파일이 DB에 저장된 뒤 버려짐)
     max_document_size_mb: int = 50 # MARS 서버에서 변경사항 존재하면 즉각적으로 수정 필요.

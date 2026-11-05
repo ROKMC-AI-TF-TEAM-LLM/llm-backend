@@ -230,3 +230,5 @@ my_docs/
 node_modules/
 package-lock.json
 package.json
+# Log files (rotated daily: app.log, app.log.YYYY-MM-DD)
+/logs/

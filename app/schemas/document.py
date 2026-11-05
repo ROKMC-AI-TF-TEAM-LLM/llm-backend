@@ -6,6 +6,7 @@ from app.core.content_types import ContentTypeExt
 
 
 class DocumentItem(BaseModel):
+    document_id: UUID
     name: str
     type: str | None = None
     domain: str | None = None
